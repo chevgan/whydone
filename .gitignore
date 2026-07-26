@@ -1,0 +1,7 @@
+.planning/
+node_modules/
+dist/
+.DS_Store
+.idea/
+.claude/settings.local.json
+.claude/worktrees/

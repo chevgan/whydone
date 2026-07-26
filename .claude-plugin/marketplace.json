@@ -1,0 +1,14 @@
+{
+  "name": "whydone",
+  "owner": { "name": "Danil C" },
+  "metadata": {
+    "description": "A repo-committed decision log for AI coding agents — ADR × worklog. Survives git clone, reviewable in PRs."
+  },
+  "plugins": [
+    {
+      "name": "whydone",
+      "source": "./",
+      "description": "Decision log for AI agents — /whydone:log and /whydone:recall with a vendored CLI and Stop-hook nudges; works in any repo, no npm install needed"
+    }
+  ]
+}

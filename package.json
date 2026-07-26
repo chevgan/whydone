@@ -1,0 +1,58 @@
+{
+  "name": "whydone",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Repo-committed decision log for AI coding agents (ADR × worklog): /log and /recall skills for Claude Code plus a deterministic CLI. Survives git clone, reviewable in PRs.",
+  "license": "MIT",
+  "author": "Danil Chevgan (chevgan)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chevgan/whydone.git"
+  },
+  "homepage": "https://github.com/chevgan/whydone#readme",
+  "bugs": {
+    "url": "https://github.com/chevgan/whydone/issues"
+  },
+  "keywords": [
+    "claude-code",
+    "claude",
+    "decision-log",
+    "adr",
+    "architecture-decision-records",
+    "worklog",
+    "dev-journal",
+    "ai-agents",
+    "agent-memory",
+    "decision-record",
+    "cli"
+  ],
+  "engines": {
+    "node": ">=20.19"
+  },
+  "bin": {
+    "whydone": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "templates"
+  ],
+  "scripts": {
+    "build": "tsdown --config-loader native && node scripts/sync-plugin-bin.mjs",
+    "prepack": "node scripts/check-versions.mjs && npm run build",
+    "dev": "tsdown --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@clack/prompts": "1.7.0",
+    "@types/node": "25.9.1",
+    "citty": "0.2.2",
+    "gray-matter": "4.0.3",
+    "memfs": "4.57.6",
+    "picocolors": "1.1.1",
+    "tinyglobby": "0.2.17",
+    "tsdown": "0.22.1",
+    "typescript": "6.0.3",
+    "vitest": "4.1.8"
+  }
+}

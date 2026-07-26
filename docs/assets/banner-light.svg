@@ -1,0 +1,18 @@
+<svg width="840" height="190" viewBox="0 0 840 190" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="whydone — Done. And why.">
+  <rect x="1" y="1" width="838" height="188" rx="14" fill="#ffffff" stroke="#d0d7de" stroke-width="2"/>
+  <!-- left: wordmark -->
+  <text x="48" y="86" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="46" font-weight="700" fill="#1f2328">whydone</text>
+  <text x="48" y="122" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="20" fill="#57606a">Done. And why.</text>
+  <text x="48" y="152" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" fill="#8b949e">a decision log your AI writes — and reads back</text>
+  <!-- right: mini journal entry -->
+  <g transform="translate(468, 26)">
+    <rect x="0" y="0" width="330" height="138" rx="10" fill="#f6f8fa" stroke="#d0d7de"/>
+    <text x="16" y="26" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#8b949e">.whydone/20260716-auth-sessions.md</text>
+    <text x="16" y="50" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#0969da">## What changed</text>
+    <rect x="16" y="58" width="240" height="6" rx="3" fill="#d0d7de"/>
+    <text x="16" y="84" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#8250df">## Why / decisions</text>
+    <rect x="16" y="92" width="270" height="6" rx="3" fill="#d0d7de"/>
+    <rect x="16" y="102" width="180" height="6" rx="3" fill="#d0d7de"/>
+    <text x="16" y="127" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" fill="#1a7f37">- [ ] verify CSRF rotation</text>
+  </g>
+</svg>

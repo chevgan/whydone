@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/whydone.mjs\" hook stop",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
