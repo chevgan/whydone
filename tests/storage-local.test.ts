@@ -220,6 +220,13 @@ describe('v1.0 hardening', () => {
     expect(config.storage ?? 'committed').toBe('committed')
   })
 
+  it('full init --mode auto --local records both axes non-interactively', async () => {
+    await runCmd(initCommand, repo, { ...INIT_DEFAULTS, mode: 'auto', local: true })
+    const config = JSON.parse(await readFile(path.join(repo, '.whydone', 'config.json'), 'utf-8'))
+    expect(config).toMatchObject({ mode: 'auto', storage: 'local' })
+    expect(await readExcludedLines(repo)).toContain('/.whydone/')
+  })
+
   it('a stray lone END marker above the block does not break reads or duplicate blocks', async () => {
     const exclPath = resolveExcludePath(repo)!
     await mkdir(path.dirname(exclPath), { recursive: true })

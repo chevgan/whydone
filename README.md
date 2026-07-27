@@ -104,7 +104,7 @@ claude plugin install whydone@whydone
 
 Either way the install is per-machine, so it covers every surface at once. Then **start a NEW session** — plugins load at session start, an already-open session won't see them. (`claude plugin list` shows what's installed.)
 
-That's the whole machine setup. The plugin carries the skills (`/whydone:log`, `/whydone:recall`), the Stop hook, and its own vendored copy of the CLI — nothing is installed into your projects. The first time you run `/whydone:log` in a repo, it offers to scaffold `.whydone/` (journal dir + `config.json` + a CLAUDE.md marker block) and you're logging.
+That's the whole machine setup. The plugin carries the skills (`/whydone:log`, `/whydone:recall`), the Stop hook, and its own vendored copy of the CLI — nothing is installed into your projects. The first time you run `/whydone:log` in a repo, it offers to scaffold `.whydone/` and asks two explicit questions — storage (**committed** or **local**) and journal mode (**ask** / **auto** / **manual**) — and you're logging.
 
 ### Alternative: npm devDependency (Node projects, teams, CI)
 
@@ -113,7 +113,7 @@ npm i -D whydone
 npx whydone init
 ```
 
-The npm channel pins the whydone version in your lock-file, commits the skills into `.claude/skills/` (plain `/log` and `/recall` names, no namespace), and gives CI `npx whydone validate`. `init` runs a two-question wizard:
+The npm channel pins the whydone version in your lock-file, commits the skills into `.claude/skills/` (plain `/log` and `/recall` names, no namespace), and gives CI `npx whydone validate`. `init` runs a three-question wizard:
 
 ```
 whydone — Done. And why.
@@ -122,6 +122,10 @@ whydone — Done. And why.
   ● ask (recommended) — after substantive work, Claude drafts an entry and asks before writing
   ○ auto — Claude writes entries itself; you review them in git diff
   ○ manual — only when you run /log
+
+◆ Journal storage — where entries live:
+  ● committed (recommended) — ordinary repo files, teammates and CI see the journal
+  ○ local — hidden from git via .git/info/exclude, this machine only
 
 ◆ Install a Stop hook into .claude/settings.local.json?
   It runs `whydone hook stop` when Claude finishes a turn and nudges per your mode.

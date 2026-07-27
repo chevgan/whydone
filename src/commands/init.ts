@@ -337,6 +337,8 @@ export default defineCommand({
     let mode: WhydoneMode
     let explicit: boolean
     let interactiveConsent = false
+    let wizardLocal = false
+    let wizardAskedStorage = false
 
     if (args.mode !== undefined && isWhydoneMode(args.mode)) {
       mode = args.mode
@@ -373,6 +375,35 @@ export default defineCommand({
       mode = selected as WhydoneMode
       explicit = true // a wizard answer counts as explicitly decided (§2.2)
 
+      // Storage question — FRESH setups only. An existing journal already has
+      // a storage policy; transitions go through `whydone hide` / `publish`,
+      // never a silent wizard flip.
+      if (existingConfig === null) {
+        wizardAskedStorage = true
+        const storageSel = await clack.select({
+          message: 'Journal storage — where entries live:',
+          options: [
+            {
+              value: 'committed',
+              label: 'committed (recommended)',
+              hint: 'ordinary repo files — commit them, teammates and CI see the journal',
+            },
+            {
+              value: 'local',
+              label: 'local',
+              hint: 'hidden from git via .git/info/exclude — this machine only, no backup',
+            },
+          ],
+          initialValue: 'committed',
+        })
+        if (clack.isCancel(storageSel)) {
+          clack.cancel('Operation cancelled — nothing was written.')
+          process.exit(0)
+          return
+        }
+        wizardLocal = storageSel === 'local'
+      }
+
       if (mode !== 'manual' && args.hook !== false) {
         const consent = await clack.confirm({
           message:
@@ -395,6 +426,8 @@ export default defineCommand({
       mode = existingConfig?.mode ?? 'manual'
       explicit = false
     }
+
+    const useLocal = args.local || wizardLocal
 
     // Hook install decision (§2.2): a bare non-interactive run never touches
     // settings files, even when the committed mode is ask/auto.
@@ -426,7 +459,7 @@ export default defineCommand({
     }
 
     // --local cannot hide a journal git already tracks (same refusal as hide).
-    if (args.local && isTracked(cwd, JOURNAL_DIR)) {
+    if (useLocal && isTracked(cwd, JOURNAL_DIR)) {
       process.stderr.write(
         `error: ${JOURNAL_DIR}/ is already tracked by git — --local cannot hide tracked files.\n` +
           '  Untrack it first (deliberate, history-visible; committed entries stay in git history):\n' +
@@ -466,8 +499,12 @@ export default defineCommand({
     // this run. A bare non-interactive re-run leaves an existing config
     // byte-untouched (preserves committed team policy, no CI churn).
     const configInvalid = existsSync(configPath) && existingConfig === null
-    if (!existsSync(configPath) || configInvalid || explicit || args.local) {
-      await writeConfigMode(journalDir, mode, args.local ? 'local' : undefined)
+    if (!existsSync(configPath) || configInvalid || explicit || useLocal) {
+      await writeConfigMode(
+        journalDir,
+        mode,
+        useLocal ? 'local' : wizardAskedStorage ? 'committed' : undefined,
+      )
       if (configInvalid) {
         process.stderr.write(
           yellow('warn') + `: ${JOURNAL_DIR}/config.json was invalid — rewritten with mode ${mode}\n`,
@@ -489,7 +526,7 @@ export default defineCommand({
     // ---- Step 6b (v0.4): storage local — hide the journal from git ----
     let localNoGit = false
     let localClaudeMdVisible = false
-    if (args.local) {
+    if (useLocal) {
       const toExclude = [`${JOURNAL_DIR}/`]
       const claudeMdTracked = !args.global && isTracked(cwd, 'CLAUDE.md')
       if (!args.global && !claudeMdTracked) toExclude.push('CLAUDE.md')
@@ -589,7 +626,7 @@ export default defineCommand({
       }
 
       const claudeMdDisplay = args.global ? '~/.claude/CLAUDE.md' : 'CLAUDE.md'
-      const effLocal = args.local || existingConfig?.storage === 'local'
+      const effLocal = useLocal || existingConfig?.storage === 'local'
       const fullModeLine = effLocal ? MODE_LINE_LOCAL[mode] : MODE_LINE[mode]
       const storageLine = effLocal
         ? localNoGit

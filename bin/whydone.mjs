@@ -15198,6 +15198,8 @@ var init_init = __esmMin((() => {
 			let mode;
 			let explicit;
 			let interactiveConsent = false;
+			let wizardLocal = false;
+			let wizardAskedStorage = false;
 			if (args.mode !== void 0 && isWhydoneMode(args.mode)) {
 				mode = args.mode;
 				explicit = true;
@@ -15235,6 +15237,28 @@ var init_init = __esmMin((() => {
 				}
 				mode = selected;
 				explicit = true;
+				if (existingConfig === null) {
+					wizardAskedStorage = true;
+					const storageSel = await clack.select({
+						message: "Journal storage — where entries live:",
+						options: [{
+							value: "committed",
+							label: "committed (recommended)",
+							hint: "ordinary repo files — commit them, teammates and CI see the journal"
+						}, {
+							value: "local",
+							label: "local",
+							hint: "hidden from git via .git/info/exclude — this machine only, no backup"
+						}],
+						initialValue: "committed"
+					});
+					if (clack.isCancel(storageSel)) {
+						clack.cancel("Operation cancelled — nothing was written.");
+						process.exit(0);
+						return;
+					}
+					wizardLocal = storageSel === "local";
+				}
 				if (mode !== "manual" && args.hook !== false) {
 					const consent = await clack.confirm({
 						message: `Install a Stop hook into ${settingsDisplay}?\nIt runs \`whydone hook stop\` when Claude finishes a turn and nudges per your mode.
@@ -15253,6 +15277,7 @@ Required for ask/auto to trigger automatically. Remove anytime: npx whydone unin
 				mode = existingConfig?.mode ?? "manual";
 				explicit = false;
 			}
+			const useLocal = args.local || wizardLocal;
 			const installHook = mode !== "manual" && args.hook !== false && (interactive ? interactiveConsent : explicit);
 			if (args["dry-run"]) {
 				process.stdout.write(bold("whydone init dry-run plan:\n"));
@@ -15272,7 +15297,7 @@ Required for ask/auto to trigger automatically. Remove anytime: npx whydone unin
 				if (args.local) process.stdout.write(green("  [update]") + " " + dim(`.git/info/exclude (hide ${JOURNAL_DIR}/, storage: local)\n`));
 				return;
 			}
-			if (args.local && isTracked(cwd, ".whydone")) {
+			if (useLocal && isTracked(cwd, ".whydone")) {
 				process.stderr.write(`error: ${JOURNAL_DIR}/ is already tracked by git — --local cannot hide tracked files.\n  Untrack it first (deliberate, history-visible; committed entries stay in git history):
     git rm -r --cached ${JOURNAL_DIR} && git commit -m "untrack journal"\n  then re-run with --local, or use \`whydone hide\`.
 `);
@@ -15291,8 +15316,8 @@ Required for ask/auto to trigger automatically. Remove anytime: npx whydone unin
 			const result = await copySkills(TEMPLATES_DIR$1, skillsDir, { force: args.force });
 			await patchClaudeMd(claudeMdPath, indexPath, scope);
 			const configInvalid = existsSync(configPath) && existingConfig === null;
-			if (!existsSync(configPath) || configInvalid || explicit || args.local) {
-				await writeConfigMode(journalDir, mode, args.local ? "local" : void 0);
+			if (!existsSync(configPath) || configInvalid || explicit || useLocal) {
+				await writeConfigMode(journalDir, mode, useLocal ? "local" : wizardAskedStorage ? "committed" : void 0);
 				if (configInvalid) process.stderr.write(yellow("warn") + `: ${JOURNAL_DIR}/config.json was invalid — rewritten with mode ${mode}\n`);
 			}
 			await mkdir(path.join(journalDir, ".cache"), { recursive: true });
@@ -15306,7 +15331,7 @@ Required for ask/auto to trigger automatically. Remove anytime: npx whydone unin
 			}
 			let localNoGit = false;
 			let localClaudeMdVisible = false;
-			if (args.local) {
+			if (useLocal) {
 				const toExclude = [`${JOURNAL_DIR}/`];
 				const claudeMdTracked = !args.global && isTracked(cwd, "CLAUDE.md");
 				if (!args.global && !claudeMdTracked) toExclude.push("CLAUDE.md");
@@ -15365,7 +15390,7 @@ Required for ask/auto to trigger automatically. Remove anytime: npx whydone unin
 						break;
 				}
 				const claudeMdDisplay = args.global ? "~/.claude/CLAUDE.md" : "CLAUDE.md";
-				const effLocal = args.local || existingConfig?.storage === "local";
+				const effLocal = useLocal || existingConfig?.storage === "local";
 				const fullModeLine = effLocal ? MODE_LINE_LOCAL[mode] : MODE_LINE[mode];
 				const storageLine = effLocal ? localNoGit ? "  Storage:          local (no git repo here — nothing to exclude)\n" : "  Storage:          LOCAL-ONLY — .whydone/ hidden via .git/info/exclude; no backup. `whydone publish` reverses.\n" : "";
 				const step3 = effLocal ? "  3. The journal is local-only — nothing of it to commit. Commit the tooling if you want:\n       git add .claude/skills .claude/whydone.lock.json\n" : "  3. Commit the shared parts:\n       git add .whydone .claude/skills .claude/whydone.lock.json CLAUDE.md\n     (.claude/settings.local.json stays local — teammates run `npx whydone init` once after cloning.)\n";
