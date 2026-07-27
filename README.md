@@ -86,19 +86,23 @@ In `ask` and `auto` modes you don't even type `/log` — after substantive work,
 
 ## Quickstart
 
-**Install once as a Claude Code plugin — works in every repo you open, any language, no npm project required:**
+**Install once as a Claude Code plugin — works in every repo you open, any language, no npm project required.** Pick the path for where you run Claude:
+
+**Claude Code in a terminal** — use the slash commands inside a session:
 
 ```
 /plugin marketplace add chevgan/whydone
 /plugin install whydone@whydone
 ```
 
-Or from any terminal — same result, and it works even where slash-commands don't (e.g. the desktop app):
+**Desktop app (or any other surface)** — the `/plugin` dialog is terminal-only there, so run the same install once from a regular shell instead:
 
 ```bash
 claude plugin marketplace add chevgan/whydone
 claude plugin install whydone@whydone
 ```
+
+Either way the install is per-machine, so it covers every surface at once. Then **start a NEW session** — plugins load at session start, an already-open session won't see them. (`claude plugin list` shows what's installed.)
 
 That's the whole machine setup. The plugin carries the skills (`/whydone:log`, `/whydone:recall`), the Stop hook, and its own vendored copy of the CLI — nothing is installed into your projects. The first time you run `/whydone:log` in a repo, it offers to scaffold `.whydone/` (journal dir + `config.json` + a CLAUDE.md marker block) and you're logging.
 

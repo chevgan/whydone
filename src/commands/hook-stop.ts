@@ -240,6 +240,21 @@ function porcelainPath(line: string): string {
   return arrow === -1 ? raw : raw.slice(arrow + 4)
 }
 
+/** Stat every entry file directly — the anchor source when git can't see them. */
+function statJournalEntries(projectDir: string): DirtyEntry[] {
+  const out: DirtyEntry[] = []
+  try {
+    for (const f of readdirSync(path.join(projectDir, JOURNAL_DIR))) {
+      if (!isEntryBasename(f)) continue
+      const st = statSync(path.join(projectDir, JOURNAL_DIR, f))
+      out.push({ path: JOURNAL_DIR + '/' + f, mtimeSec: Math.floor(st.mtimeMs / 1000) })
+    }
+  } catch {
+    // Unreadable journal dir — no mtime to contribute.
+  }
+  return out
+}
+
 function gatherGitFacts(projectDir: string): GitFacts | null {
   const inside = runGit(projectDir, ['rev-parse', '--is-inside-work-tree'])
   if (!inside.ok || inside.stdout.trim() !== 'true') return null
@@ -268,18 +283,7 @@ function gatherGitFacts(projectDir: string): GitFacts | null {
         // directly so the anchor still covers a just-/log-ged, never-committed
         // entry (§3.4 step 7) — otherwise anchor stays 0 and the whole repo
         // history counts as unlogged (false nudge right after the first /log).
-        try {
-          for (const f of readdirSync(path.join(projectDir, JOURNAL_DIR))) {
-            if (!isEntryBasename(f)) continue
-            const st = statSync(path.join(projectDir, JOURNAL_DIR, f))
-            dirtyEntries.push({
-              path: JOURNAL_DIR + '/' + f,
-              mtimeSec: Math.floor(st.mtimeMs / 1000),
-            })
-          }
-        } catch {
-          // Unreadable journal dir — no mtime to contribute.
-        }
+        dirtyEntries.push(...statJournalEntries(projectDir))
       } else if (filePath.startsWith(JOURNAL_DIR + '/')) {
         // Journal-side line: entry files feed the anchor; generated files
         // (INDEX.md, manifest.json, .cache/) are never a work signal.
@@ -295,6 +299,18 @@ function gatherGitFacts(projectDir: string): GitFacts | null {
         dirty.push(line)
       }
     }
+  }
+
+  // storage: local (v1.0.1) — an excluded journal produces NO porcelain line
+  // at all (git ignores it by design), so neither branch above ran and the
+  // anchor would stay 0: every pre-journal commit counts as unlogged, capped
+  // at MAX_COMMITS (reproduced in the first field test as a false "20
+  // unlogged commit(s)" nudge right after /log). When the journal has never
+  // been committed AND contributed no status lines, stat the entries
+  // directly. A fresh CLONE is unaffected (journalCommitTime > 0 there), so
+  // the deliberate clone-must-nudge behavior of the mtime-free design holds.
+  if (status.ok && journalCommitTime === 0 && dirtyEntries.length === 0) {
+    dirtyEntries.push(...statJournalEntries(projectDir))
   }
 
   const listCommitsSince = (epochSec: number): string[] => {

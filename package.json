@@ -1,6 +1,6 @@
 {
   "name": "whydone",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "Repo-committed decision log for AI coding agents (ADR × worklog): /log and /recall skills for Claude Code plus a deterministic CLI. Survives git clone, reviewable in PRs.",
   "license": "MIT",

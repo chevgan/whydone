@@ -372,4 +372,47 @@ describe('whydone hook stop — entirely-untracked journal (real git repo)', () 
       rmSync(dir, { recursive: true, force: true })
     }
   })
+
+  // storage: local — the journal is hidden via .git/info/exclude, so git
+  // status shows NO journal line at all (not even '?? .whydone/'). The direct
+  // entry-stat fallback must fire anyway, or anchor=0 counts the whole
+  // pre-journal history as unlogged (v1.0 field report: false "20 unlogged
+  // commit(s)" nudge immediately after the first /log in an active repo).
+  function excludeJournal(dir: string): void {
+    mkdirSync(path.join(dir, '.git', 'info'), { recursive: true })
+    writeFileSync(
+      path.join(dir, '.git', 'info', 'exclude'),
+      '# whydone:start\n/.whydone/\n# whydone:end\n',
+      'utf8',
+    )
+  }
+
+  it('local-storage journal (excluded): fresh entry covers prior commits ⇒ silent', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'whydone-hook-local-'))
+    try {
+      setupRepo(dir)
+      excludeJournal(dir)
+      const r = runHook(dir, 'local-journal-session-1')
+      expect(r.status).toBe(0)
+      expect(r.stdout).toBe('')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('local-storage journal (excluded): work after the last entry ⇒ nudge still fires', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'whydone-hook-local-'))
+    try {
+      setupRepo(dir)
+      excludeJournal(dir)
+      const old = new Date(Date.now() - 3_600_000)
+      utimesSync(path.join(dir, '.whydone', '20260716-test-entry.md'), old, old)
+      const r = runHook(dir, 'local-journal-session-2')
+      expect(r.status).toBe(0)
+      expect(r.stdout).toContain('"decision":"block"')
+      expect(r.stdout).toContain('2 unlogged commit(s)')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
 })

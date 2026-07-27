@@ -16572,6 +16572,21 @@ function porcelainPath(line) {
 	const arrow = raw.indexOf(" -> ");
 	return arrow === -1 ? raw : raw.slice(arrow + 4);
 }
+/** Stat every entry file directly — the anchor source when git can't see them. */
+function statJournalEntries(projectDir) {
+	const out = [];
+	try {
+		for (const f of readdirSync(path.join(projectDir, JOURNAL_DIR))) {
+			if (!isEntryBasename(f)) continue;
+			const st = statSync(path.join(projectDir, JOURNAL_DIR, f));
+			out.push({
+				path: JOURNAL_DIR + "/" + f,
+				mtimeSec: Math.floor(st.mtimeMs / 1e3)
+			});
+		}
+	} catch {}
+	return out;
+}
 function gatherGitFacts(projectDir) {
 	const inside = runGit(projectDir, ["rev-parse", "--is-inside-work-tree"]);
 	if (!inside.ok || inside.stdout.trim() !== "true") return null;
@@ -16597,16 +16612,7 @@ function gatherGitFacts(projectDir) {
 	if (status.ok) for (const line of status.stdout.split("\n")) {
 		if (line.trim() === "") continue;
 		const filePath = porcelainPath(line);
-		if (filePath === ".whydone/" || filePath === ".whydone") try {
-			for (const f of readdirSync(path.join(projectDir, JOURNAL_DIR))) {
-				if (!isEntryBasename(f)) continue;
-				const st = statSync(path.join(projectDir, JOURNAL_DIR, f));
-				dirtyEntries.push({
-					path: JOURNAL_DIR + "/" + f,
-					mtimeSec: Math.floor(st.mtimeMs / 1e3)
-				});
-			}
-		} catch {}
+		if (filePath === ".whydone/" || filePath === ".whydone") dirtyEntries.push(...statJournalEntries(projectDir));
 		else if (filePath.startsWith(".whydone/")) {
 			if (isEntryBasename(path.posix.basename(filePath))) try {
 				const st = statSync(path.join(projectDir, filePath));
@@ -16617,6 +16623,7 @@ function gatherGitFacts(projectDir) {
 			} catch {}
 		} else dirty.push(line);
 	}
+	if (status.ok && journalCommitTime === 0 && dirtyEntries.length === 0) dirtyEntries.push(...statJournalEntries(projectDir));
 	const listCommitsSince = (epochSec) => {
 		if (headSha === null) return [];
 		const sinceIso = (/* @__PURE__ */ new Date((epochSec + 1) * 1e3)).toISOString();
