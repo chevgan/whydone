@@ -8,7 +8,8 @@
 </p>
 
 <p align="center">
-  <strong>A repo-committed decision log for AI coding agents.</strong><br>
+  <strong>Stop making your coding agent rediscover yesterday's decisions.</strong><br>
+  A repo-committed decision log for AI coding agents.<br>
   ADR × worklog · survives <code>git clone</code> · reviewable in PRs
 </p>
 
@@ -19,92 +20,97 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
 </p>
 
-**whydone** gives your repo a _decision log_ that AI coding agents write and read themselves. Every Claude Code session ends the same way: the work survives, the reasoning dies. Next session, Claude re-reads your code and re-guesses why it looks that way — then confidently re-litigates decisions you already made, and re-steps on rakes you already found.
+<p align="center">
+  <a href="#quickstart"><strong>Quickstart</strong></a> ·
+  <a href="#see-it-in-30-seconds">Demo</a> ·
+  <a href="#why-whydone">Why whydone</a> ·
+  <a href="#technical-reference">Technical reference</a> ·
+  <a href="SCHEMA.md">Schema</a>
+</p>
 
-After a task, `/log` writes one Markdown entry: what changed, why, what was rejected, what's still risky. Before the next task, `/recall` loads only the relevant entries back into context. Three journal modes — **ask** (Claude offers a drafted entry), **auto** (Claude writes it, you review the diff), **manual** (only `/log`). No backend, no database, no embeddings — just files in `.whydone/`, committed with your code.
+## Your code survives the session. The reasoning usually doesn't.
 
-| Every new session, without whydone | With whydone |
-|---|---|
-| Claude re-reads the code and *guesses* why it looks that way | `/recall` loads the recorded decision in seconds |
-| Confidently re-litigates choices you already made | "JWT was rejected on 07-16 — revocation cost. Building on sessions." |
-| Re-steps on rakes you already found | Gotchas resurface *before* the code is touched |
-| Open follow-ups die with the context window | Unchecked `- [ ]` items come back until they're done |
-| Your teammates' Claude knows nothing about any of it | The whole history arrives with `git clone` |
+An AI coding agent finishes a task, the tests pass, and the code is committed. Then the session ends.
 
-```mermaid
-flowchart LR
-    A["🛠 session 1<br/>finish a task"] -->|"/log"| B["📓 .whydone/&lt;date&gt;-slug.md<br/>what · why · rejected · risks · follow-ups"]
-    B -->|"git commit"| C[("repo")]
-    C -->|"clone / pull"| D["👥 any machine,<br/>any teammate"]
-    B -->|"/recall"| E["🧠 session 2, fresh context<br/>builds on real decisions"]
-    D -->|"/recall"| E
-    E --> A
-```
+The next session sees the code — but not the decisions behind it. It re-reads, re-guesses, re-litigates rejected alternatives, and steps on gotchas you already found.
 
-[Quickstart](#quickstart) · [The loop](#the-loop) · [Journal modes](#journal-modes) · [Entry format](#what-an-entry-looks-like) · [CLI reference](#cli-reference) · [Ranking](#how-ranking-works) · [SCHEMA.md](SCHEMA.md) · [FAQ](#faq) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+**whydone gives the project itself a memory.**
 
-New here? Start with the [Quickstart](#quickstart) — two commands, one wizard, done.
+After a task, `/log` writes one Markdown entry containing what changed, why, what was rejected, what's still risky, and what needs follow-up. Before related work, `/recall` loads only the relevant entries back into context.
 
-**This is not a release changelog.** No Keep a Changelog, no changesets, no "Added/Fixed/Removed" for your users. Entries are closer to [ADRs](https://adr.github.io/) crossed with a dev worklog — decisions and gotchas, written by the AI that made them, for the AI that comes next.
+The journal lives in `.whydone/` beside your code:
 
-**This is not Claude Code's built-in memory either.** Native auto-memory is a private, machine-local scratchpad: it helps the one Claude on your machine, is not committed, cannot be code-reviewed, and does not survive a fresh clone — your teammates and your CI never see it. whydone is the opposite by design: entries are ordinary files in the repo. They travel with `git clone`, show up in PR diffs where humans can veto them, and are readable by any agent or tool. Use both: native memory for personal working notes, whydone for the decisions the project itself must not forget.
+- **Plain Markdown** — readable by humans, agents, editors, and CI.
+- **Versioned with git** — the reasoning survives a fresh clone.
+- **Reviewable in PRs** — your team can approve, correct, or reject it.
+- **No service to trust** — no backend, database, account, or embeddings.
 
-## The loop
+## See it in 30 seconds
 
-```
+```text
 ── session 1 ─────────────────────────────────────────────
 you:    refactor the auth middleware to use sessions
 claude: ...done. Tests green.
 you:    /log
 claude: wrote .whydone/20260716-auth-session-middleware.md
-        (what changed, why cookie-based won over JWT,
-         the CSRF gotcha, one thing to verify later)
+        why sessions won over JWT · CSRF gotcha · one follow-up
 
-── session 2, days later, fresh context ──────────────────
+── session 2 · days later · fresh context ────────────────
 you:    /recall auth middleware
-claude: loaded 2 entries. You moved to cookie sessions on
-        2026-07-16; JWT was rejected for revocation cost.
+claude: loaded 2 relevant entries.
+        JWT was rejected for revocation cost.
         Open follow-up: verify CSRF token rotation.
 you:    add logout-everywhere
-claude: (builds on the actual decision instead of guessing)
+claude: builds on the decision instead of reopening it
 ```
 
-In `ask` and `auto` modes you don't even type `/log` — after substantive work, whydone nudges Claude to draft the entry itself (see [Journal modes](#journal-modes)). `/recall` can also fire automatically when Claude notices it's about to touch code with recorded history.
-
-## Highlights
-
-- **[One `/log` after a task](#what-an-entry-looks-like)** — captures what changed, why, rejected alternatives, gotchas, and follow-ups in a single Markdown entry.
-- **[`/recall` before the next one](#how-ranking-works)** — deterministic ranking (no embeddings, no model calls) loads only the relevant entries into context.
-- **[Three journal modes](#journal-modes)** — ask / auto / manual; the mode is committed team policy in `.whydone/config.json`.
-- **[Stop-hook nudge](#journal-modes)** — detects unlogged work when Claude finishes a turn; fails open, never blocks, at most once per session.
-- **[Plain files, no backend](#what-an-entry-looks-like)** — Markdown + YAML frontmatter in `.whydone/`; survives `git clone`, reviewable in PR diffs, readable by any agent.
-- **[Deterministic CLI](#cli-reference)** — `init`, `index`, `validate`, `recall`, `update`, `uninstall`, `hide`, `publish`; CI-safe, `--json` where it matters.
-- **[Install once, works everywhere](#quickstart)** — the plugin channel ships skills, Stop hook, and a vendored CLI; any repo Claude Code opens can keep a journal, no npm project needed.
-- **[Team-ready](#working-in-a-team)** — teammates inherit skills, mode, and the whole decision history on `git clone` + `npm i`.
-- **[Private mode](#private-mode-a-local-only-journal)** — `--local` keeps the whole journal out of git via `.git/info/exclude`; `whydone publish` makes it a team journal later, history included.
-- **[Dogfooded](.whydone/)** — this repo keeps its own journal in `.whydone/`; every decision from v1.0.0 onward lands there.
+In `ask` and `auto` modes, whydone can offer or write the entry when substantive work ends — you do not have to remember `/log` every time. `/recall` can also run when Claude notices it is about to touch code with recorded history.
 
 ## Quickstart
 
-**Install once as a Claude Code plugin — works in every repo you open, any language, no npm project required.** Pick the path for where you run Claude:
+Install the Claude Code plugin once. It works in every repo you open, in any language, with no npm project required.
 
-**Claude Code in a terminal** — use the slash commands inside a session:
+Run inside a Claude Code terminal session:
 
-```
+```text
 /plugin marketplace add chevgan/whydone
 /plugin install whydone@whydone
 ```
 
-**Desktop app (or any other surface)** — the `/plugin` dialog is terminal-only there, so run the same install once from a regular shell instead:
+Start a **new Claude Code session**, then finish a small task and run:
+
+```text
+/whydone:log
+```
+
+The first run offers to create `.whydone/` and asks two explicit questions:
+
+1. Should the journal be **committed** or **local**?
+2. Should entries be written in **ask**, **auto**, or **manual** mode?
+
+Open another session and try:
+
+```text
+/whydone:recall <topic>
+```
+
+
+
+**Then keep working.** In `ask` mode (the recommended default) whydone offers the next entry by itself when substantive work ends.
+
+<details>
+<summary><strong>Installing from the desktop app — or anywhere without slash commands</strong></summary>
+
+The `/plugin` dialog is terminal-only. Run the same install once from any regular shell — the result is identical and per-machine:
 
 ```bash
 claude plugin marketplace add chevgan/whydone
 claude plugin install whydone@whydone
 ```
 
-Either way the install is per-machine, so it covers every surface at once. Then **start a NEW session** — plugins load at session start, an already-open session won't see them. (`claude plugin list` shows what's installed.)
+Then start a new session. `claude plugin list` shows what's installed.
 
-That's the whole machine setup. The plugin carries the skills (`/whydone:log`, `/whydone:recall`), the Stop hook, and its own vendored copy of the CLI — nothing is installed into your projects. The first time you run `/whydone:log` in a repo, it offers to scaffold `.whydone/` and asks two explicit questions — storage (**committed** or **local**) and journal mode (**ask** / **auto** / **manual**) — and you're logging.
+</details>
 
 ### Alternative: npm devDependency (Node projects, teams, CI)
 
@@ -137,11 +143,29 @@ Non-interactive setup: `npx whydone init --yes` (ask mode + hook), or `npx whydo
 
 Whichever channel runs it, the skills resolve the CLI through a fixed offline chain — the plugin's vendored `bin/whydone.mjs` first, then `npx --no-install whydone` from `node_modules` — never a network fetch mid-session.
 
-### Prove it works (TL;DR)
+## Why whydone
 
-1. Finish any small task in Claude Code.
-2. Run `/log` (or, in ask/auto mode, just end the turn and watch whydone offer it). Inspect the file it wrote in `.whydone/`.
-3. Open a **new session**. Run `/recall <topic>`. Watch the decision come back.
+| Every new session, without whydone | With whydone |
+|---|---|
+| Claude re-reads the code and *guesses* why it looks that way | `/recall` loads the recorded decision in seconds |
+| Confidently re-litigates choices you already made | "JWT was rejected on 07-16 — revocation cost. Building on sessions." |
+| Re-steps on rakes you already found | Gotchas resurface *before* the code is touched |
+| Open follow-ups die with the context window | Unchecked `- [ ]` items come back until they're done |
+| Your teammates' Claude knows nothing about any of it | The whole history arrives with `git clone` |
+
+```mermaid
+flowchart LR
+    A["🛠 session 1<br/>finish a task"] -->|"/log"| B["📓 .whydone/&lt;date&gt;-slug.md<br/>what · why · rejected · risks · follow-ups"]
+    B -->|"git commit"| C[("repo")]
+    C -->|"clone / pull"| D["👥 any machine,<br/>any teammate"]
+    B -->|"/recall"| E["🧠 session 2, fresh context<br/>builds on real decisions"]
+    D -->|"/recall"| E
+    E --> A
+```
+
+**This is not a release changelog.** No Keep a Changelog, no changesets, no "Added/Fixed/Removed" for your users. Entries are closer to [ADRs](https://adr.github.io/) crossed with a dev worklog — decisions and gotchas, written by the AI that made them, for the AI that comes next.
+
+**This is not Claude Code's built-in memory either.** Native auto-memory is a private, machine-local scratchpad: it helps the one Claude on your machine, is not committed, cannot be code-reviewed, and does not survive a fresh clone — your teammates and your CI never see it. whydone is the opposite by design: entries are ordinary files in the repo. They travel with `git clone`, show up in PR diffs where humans can veto them, and are readable by any agent or tool. Use both: native memory for personal working notes, whydone for the decisions the project itself must not forget.
 
 ## Journal modes
 
@@ -160,18 +184,6 @@ The mode lives in `.whydone/config.json` and controls two things: whether `/log`
 **Switching modes:** `npx whydone init --mode auto` (or re-run `npx whydone init` and pick in the wizard). The mode is **committed team policy** — teammates inherit it on pull, the way `.changeset/config.json` or `lefthook.yml` work.
 
 **Disabling:** `--no-hook` at init skips the hook entirely; `npx whydone uninstall` removes it; deleting `.whydone/config.json` (or any broken/missing config) degrades everything to manual. Claude Code's `disableAllHooks` also neutralizes it — ask/auto then simply behave like manual until you run `/log` yourself.
-
-## Working in a team
-
-**Plugin teams:** the journal (`.whydone/`) and the CLAUDE.md marker block are committed and travel with the repo; each teammate installs the plugin once on their machine and the whole decision history answers immediately after `git clone` — no per-project setup at all.
-
-**npm teams** additionally commit the skills and pin the version. What's committed: `.whydone/` (entries + config.json — including the journal mode, which is team policy), `.claude/skills/` (the skills), `.claude/whydone.lock.json`, and the CLAUDE.md marker block. What's not: `.claude/settings.local.json` (the Stop hook) and `.whydone/.cache/` (hook state) — both per-machine.
-
-A teammate after `git clone` (npm channel):
-
-1. `npm i` — whydone is already a devDependency.
-2. `npx whydone init` — idempotent: skills/config/journal already exist and are left untouched (the committed mode is never overwritten by a re-run). In a terminal the wizard opens preselecting the committed mode and asks the one hook-consent question — that consent is what installs the local Stop hook. In CI / non-TTY, init changes nothing and installs no hook (pipelines don't need one).
-3. New Claude Code session → `/recall <topic>` — the whole team's decision history answers.
 
 ## Private mode: a local-only journal
 
@@ -194,7 +206,23 @@ Honest limits, in order of importance:
 - **Already-committed journals can't be un-published by hiding.** `whydone hide` refuses if `.whydone/` is tracked: entries that reached git history stay in git history; untracking is a deliberate git operation it won't do for you.
 - **whydone hides the journal, not the AI.** Commit style, velocity, and the npm channel's own traces (package.json devDependency, `.claude/skills/`) are outside its jurisdiction — full tracelessness is the plugin channel + `init --journal-only --local`.
 
-## What an entry looks like
+## Working in a team
+
+**Plugin teams:** the journal (`.whydone/`) and the CLAUDE.md marker block are committed and travel with the repo; each teammate installs the plugin once on their machine and the whole decision history answers immediately after `git clone` — no per-project setup at all.
+
+**npm teams** additionally commit the skills and pin the version. What's committed: `.whydone/` (entries + config.json — including the journal mode, which is team policy), `.claude/skills/` (the skills), `.claude/whydone.lock.json`, and the CLAUDE.md marker block. What's not: `.claude/settings.local.json` (the Stop hook) and `.whydone/.cache/` (hook state) — both per-machine.
+
+A teammate after `git clone` (npm channel):
+
+1. `npm i` — whydone is already a devDependency.
+2. `npx whydone init` — idempotent: skills/config/journal already exist and are left untouched (the committed mode is never overwritten by a re-run). In a terminal the wizard opens preselecting the committed mode and asks the one hook-consent question — that consent is what installs the local Stop hook. In CI / non-TTY, init changes nothing and installs no hook (pipelines don't need one).
+3. New Claude Code session → `/recall <topic>` — the whole team's decision history answers.
+
+## Technical reference
+
+Everything deterministic under the hood: the entry contract, the CLI, the ranking formula, and the two delivery channels.
+
+### What an entry looks like
 
 Markdown + YAML frontmatter, one file per entry at `.whydone/<YYYYMMDD-slug>.md`:
 
@@ -210,46 +238,7 @@ tags: [auth, middleware]
 files: [src/middleware/auth.ts, src/lib/session.ts]
 ---
 
-## What changed
-- Replaced JWT verification with server-side cookie sessions.
-
-## Why / decisions
-- Revocation: killing a session must be instant; JWT blocklists
-  reintroduce the state JWT was supposed to avoid.
-
-## Alternatives rejected
-- Short-lived JWT + refresh rotation — 2x the moving parts for
-  the same guarantee.
-
-## Gotchas / risks
-- Session cookie is SameSite=Lax; the /webhook endpoint bypasses
-  it on purpose.
-
-## Verify-later / follow-ups
-- [ ] Confirm CSRF token rotation under concurrent tabs.
-```
-
-Five canonical body sections; empty ones are omitted, not padded. The exact heading strings matter — tooling matches them verbatim. Full contract in [SCHEMA.md](SCHEMA.md).
-
-Small change, small entry: say "quick" to `/log` (or let it detect a 1-commit session) and you get the minimal form — same schema, only the required fields and What changed. The [MADR](https://adr.github.io/madr/) ladder (bare → minimal → full) is the precedent: the format that survives is the one that is cheap at its floor.
-
-```markdown
----
-schema: 1
-id: 20260716-fix-recall-token-cap
-date: "2026-07-16"
-slug: fix-recall-token-cap
-task: "Raise recall query token cap 12 -> 20"
-tags: [recall]
----
-
-## What changed
-- Bumped MAX_QUERY_TOKENS to 20 so bilingual RU+EN queries stop truncating.
-```
-
-**We dogfood it.** This repo's own journal lives in [`.whydone/`](.whydone/) — started clean at v1.0.0, so you can watch the decision log of whydone's own development accumulate entry by entry from the first release onward.
-
-## CLI reference
+### CLI reference
 
 The skills do the AI work; the CLI does everything deterministic. All commands accept `--quiet` and `--no-color`; most accept `--dry-run`.
 
@@ -267,7 +256,7 @@ The skills do the AI work; the CLI does everything deterministic. All commands a
 
 `index`, `validate`, and `recall` take an optional path positional (default `.whydone`).
 
-### init flags
+#### init flags
 
 | Flag | Meaning |
 |---|---|
@@ -280,7 +269,7 @@ The skills do the AI work; the CLI does everything deterministic. All commands a
 | `--global` | Target `~/.claude/` (skills, CLAUDE.md, hook) instead of the project |
 | `--dry-run` | Print the plan, write nothing (non-interactive by design) |
 
-### recall flags
+#### recall flags
 
 ```bash
 npx whydone recall --query "auth middleware" \
@@ -298,22 +287,11 @@ npx whydone recall --query "auth middleware" \
 | `--all` | Return all eligible results, ignore limit |
 | `--json` | Full report: scores, per-component breakdown, superseded info, open follow-up counts |
 
-## How ranking works
+### How ranking works
 
 One deterministic formula, no model calls: `3 x file-overlap + 2 x tag-match + 2 x keyword-match + recency`, where recency is rank-based over the corpus (newest = 1.0), and entries superseded by a newer entry are multiplied by 0.25 — de-prioritized tombstones, never deleted. Ties break by score, then date, then id, so the same journal and query always return the same order. No embeddings by design: recall must work offline, add zero dependencies, and be exactly reproducible in CI. The `/recall` skill calls this ranking, then reads only the top few files — your context window never pays for the whole journal.
 
-## Docs by goal
-
-- **New here:** [Quickstart](#quickstart) · [The loop](#the-loop) · [Prove it works](#prove-it-works-tldr)
-- **Picking a mode:** [Journal modes](#journal-modes) · [FAQ: what auto mode skips](#faq)
-- **Team setup:** [Working in a team](#working-in-a-team) · [FAQ: workspace trust](#faq)
-- **Format contract:** [SCHEMA.md](SCHEMA.md) · [What an entry looks like](#what-an-entry-looks-like)
-- **CI & automation:** [CLI reference](#cli-reference) (`validate`, `index`) · [How ranking works](#how-ranking-works)
-- **Privacy:** [Private mode](#private-mode-a-local-only-journal) · `whydone hide` / `whydone publish`
-- **Safety & removal:** [FAQ: hook safety](#faq) · [SECURITY.md](SECURITY.md) · `npx whydone uninstall`
-- **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md) · the journal itself: [`.whydone/`](.whydone/)
-
-## The two channels, honestly compared
+### The two channels, honestly compared
 
 The plugin carries the **full** experience: skills, deterministic recall ranking, the Stop hook, and journal scaffolding — its vendored `bin/whydone.mjs` is the same single-file CLI the npm package ships, so nothing degrades.
 
