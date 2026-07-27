@@ -93,6 +93,13 @@ In `ask` and `auto` modes you don't even type `/log` — after substantive work,
 /plugin install whydone@whydone
 ```
 
+Or from any terminal — same result, and it works even where slash-commands don't (e.g. the desktop app):
+
+```bash
+claude plugin marketplace add chevgan/whydone
+claude plugin install whydone@whydone
+```
+
 That's the whole machine setup. The plugin carries the skills (`/whydone:log`, `/whydone:recall`), the Stop hook, and its own vendored copy of the CLI — nothing is installed into your projects. The first time you run `/whydone:log` in a repo, it offers to scaffold `.whydone/` (journal dir + `config.json` + a CLAUDE.md marker block) and you're logging.
 
 ### Alternative: npm devDependency (Node projects, teams, CI)
