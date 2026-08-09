@@ -1,13 +1,20 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "whydone",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Repo-committed decision log for AI agents — /whydone:log records what was done and why, /whydone:recall loads it back. ADR × worklog, lives in your repo, survives git clone.",
-  "author": { "name": "Danil Chevgan", "url": "https://github.com/chevgan" },
+  "author": {
+    "name": "Danil Chevgan",
+    "url": "https://github.com/chevgan"
+  },
   "homepage": "https://github.com/chevgan/whydone",
   "repository": "https://github.com/chevgan/whydone",
   "license": "MIT",
-  "keywords": ["decision-log", "adr", "worklog", "journal"],
-  "skills": "./templates/skills",
-  "hooks": "./hooks/hooks.json"
+  "keywords": [
+    "decision-log",
+    "adr",
+    "worklog",
+    "journal"
+  ],
+  "skills": "./templates/skills"
 }

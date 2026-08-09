@@ -23,10 +23,13 @@ const readJson = (p: string) => JSON.parse(readFileSync(path.join(ROOT, p), 'utf
 const readText = (p: string) => readFileSync(path.join(ROOT, p), 'utf-8')
 
 describe('plugin manifest wiring', () => {
-  it('plugin.json points skills at templates/skills and hooks at hooks/hooks.json', () => {
+  it('plugin.json points skills at templates/skills and does NOT redeclare the default hooks path', () => {
     const plugin = readJson('.claude-plugin/plugin.json')
     expect(plugin.skills).toBe('./templates/skills')
-    expect(plugin.hooks).toBe('./hooks/hooks.json')
+    // hooks/hooks.json is auto-loaded from its standard location; referencing
+    // it from manifest.hooks too makes Claude Code fail the whole plugin with
+    // "Duplicate hooks file detected" (field is for ADDITIONAL hook files only).
+    expect(plugin.hooks).toBeUndefined()
   })
 
   it('plugin.json version matches package.json (same guard as check-versions.mjs)', () => {
