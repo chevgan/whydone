@@ -16503,8 +16503,8 @@ you may instead tell the user in one line that nothing seems worth logging.`;
 /** REASON_AUTO (§3.7, exact). */
 function buildReasonAuto(summary) {
 	return `${NUDGE_PREFIX} — ${summary}. Journal mode is "auto" (user-configured in\n.whydone/config.json). Invoke the "log" skill now (Skill tool). Auto mode per the skill's
-STEP 7: print the full preview for visibility, then write the entry and update the index
-WITHOUT asking for confirmation — unless the skill's own ambiguity rules force a question.`;
+STEP 7: write the entry and update the index SILENTLY — no preview, no confirmation,
+report only — unless the skill's own ambiguity rules force a question.`;
 }
 /** sha256(HEAD-sha or 'unborn' + '\n' + sorted dirty lines).slice(0,16) (§3.4 step 9). */
 function buildFingerprint(headSha, dirty) {

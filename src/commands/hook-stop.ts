@@ -56,8 +56,8 @@ export function buildReasonAuto(summary: string): string {
   return (
     `${NUDGE_PREFIX} — ${summary}. Journal mode is "auto" (user-configured in\n` +
     '.whydone/config.json). Invoke the "log" skill now (Skill tool). Auto mode per the skill\'s\n' +
-    'STEP 7: print the full preview for visibility, then write the entry and update the index\n' +
-    "WITHOUT asking for confirmation — unless the skill's own ambiguity rules force a question."
+    'STEP 7: write the entry and update the index SILENTLY — no preview, no confirmation,\n' +
+    "report only — unless the skill's own ambiguity rules force a question."
   )
 }
 

@@ -104,28 +104,27 @@ If FACTS is empty (no commits in the window, clean tree) and not NO_GIT: ask the
 
 Summarize, never transcribe. Never include: raw command output, environment variable values, API keys, tokens, passwords, connection strings, or secret-shaped strings (`sk-...`, `ghp_...`, `AKIA...`, `Bearer ...`, `BEGIN ... KEY`, long base64). When STORAGE is committed, `.whydone/` is committed to git and may be public. When STORAGE is local, the journal stays out of git, but every rule above still applies in full — a local journal can be published later in one command (`whydone publish`), so write every entry as if it will be. `validate` does not scan for secrets — this pass and the preview are the only gates.
 
-## STEP 7 — Preview and ONE confirm (never write before this)
+## STEP 7 — Review gate (mode-dependent; never write before this step resolves)
 
-- Print: the target path; "Git facts: N commits since <anchor>, M changed files, K untracked" with the commit subjects listed (FACTS shown as a distinct block ABOVE the draft); any flags (no git repo / no changes / same-day overlap "N commits may overlap entry <id>" / supersedes → <old-id> / files truncated); then the FULL draft in one fenced block, byte-exact as it will be written — what the user approves is exactly what lands on disk.
-- If MODE is manual or ask: ask exactly one question:
+- If MODE is manual or ask: print the target path; "Git facts: N commits since <anchor>, M changed files, K untracked" with the commit subjects listed (FACTS shown as a distinct block ABOVE the draft); any flags (no git repo / no changes / same-day overlap "N commits may overlap entry <id>" / supersedes → <old-id> / files truncated); then the FULL draft in one fenced block, byte-exact as it will be written — what the user approves is exactly what lands on disk. Then ask exactly one question:
   `Write .whydone/<stem>.md and update the index? (write / edit: tell me what to change / cancel)`
   `edit` → apply, re-run STEP 4 self-checks + STEP 6 security pass, re-preview. `cancel` → stop.
 - If MODE is auto (which per STEP 0 already requires TRIGGER `user` or `hook` — a `self`
-  trigger was downgraded to ask before reaching this step): do NOT ask. Print one line
-  after the preview:
-  `auto mode — writing without confirmation (mode set in .whydone/config.json)` and proceed
-  to STEP 8. The full byte-exact fenced preview is STILL printed — visibility is
-  non-negotiable; the git diff is the user's review surface (under STORAGE local,
-  the written file itself is — a local journal never appears in git diff).
+  trigger was downgraded to ask before reaching this step): SILENT WRITE — print
+  nothing before the write: no facts block, no preview, no question. Proceed straight
+  to STEP 8. The STEP 10 report is the user's only notice, and the written file
+  is the review surface after the fact: git diff for committed journals, the
+  file itself for local ones — a local journal never appears in git diff.
   AMBIGUITY FALLBACK: if any of these flags is present — same-day overlap, supersedes,
   files truncated, no git repo, empty-work decision-only entry,
-  minimal variant selected by size (STEP 3 trigger b) — fall back to the ask question
+  minimal variant selected by size (STEP 3 trigger b) — fall back to the FULL
+  manual/ask flow above (facts + byte-exact preview + the one question)
   even in auto mode. Auto mode never auto-writes an ambiguous entry.
 
 ## STEP 8 — Write + index (single confirmed action)
 
 - Re-run the collision check (re-list `.whydone/`); if the stem appeared meanwhile, bump the suffix, update id AND slug together, and tell the user.
-- Write the file with the Write tool at `ROOT/.whydone/<stem>.md` — exactly the previewed bytes.
+- Write the file with the Write tool at `ROOT/.whydone/<stem>.md` — exactly the drafted bytes (in manual/ask, exactly what was previewed).
 - Update the index, running from ROOT, via the CLI resolution chain:
   1. `node "${CLAUDE_PLUGIN_ROOT}/bin/whydone.mjs" index` (skip on unsubstituted placeholder)
   2. `npx --no-install whydone index`
