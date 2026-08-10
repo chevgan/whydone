@@ -194,13 +194,68 @@ describe('decideStop — block paths and reasons', () => {
 
 describe('decideStop — debounce (§3.4 step 9)', () => {
   const dirtyGit = () => gitFacts({ dirty: ['?? src/a.ts'] })
+  // A fingerprint that never matches the current one in these fixtures.
+  const staleFp = buildFingerprint('abc123def456', ['?? src/OLD.ts'])
 
-  it('same sessionId ⇒ allow (max one nudge per session)', () => {
+  it('same session, nudge unanswered (anchor unchanged) ⇒ allow — a decline sticks for the session', () => {
+    // Nudge fired at anchor 1_000_000, user declined: no entry, anchor still
+    // 1_000_000. Even NEW commits must not re-nag (REASON_ASK promises it).
     const c = ctx({
-      git: dirtyGit(),
+      git: gitFacts({
+        journalCommitTime: 1_000_000,
+        dirty: ['?? src/a.ts'],
+        listCommitsSince: () => ['abc9999'],
+      }),
+      state: {
+        stateVersion: 1,
+        lastNudge: { sessionId: 'session-1', fingerprint: staleFp, at: 'x', anchor: 1_000_000 },
+      },
+    })
+    expect(decideStop(input({ sessionId: 'session-1' }), c)).toEqual({ block: false })
+  })
+
+  it('same session, legacy state without anchor ⇒ allow (pre-1.2.1 file treated as unanswered)', () => {
+    const c = ctx({
+      git: gitFacts({ dirty: ['?? src/a.ts'], listCommitsSince: () => ['abc9999'] }),
       state: {
         stateVersion: 1,
         lastNudge: { sessionId: 'session-1', fingerprint: 'ffffffffffffffff', at: 'x' },
+      },
+    })
+    expect(decideStop(input({ sessionId: 'session-1' }), c)).toEqual({ block: false })
+  })
+
+  it('same session, nudge honored + new commits ⇒ block again (one nudge per commit-bounded chunk)', () => {
+    // Entry written at 6_000_000 (> stored anchor 5_000_000 — nudge honored),
+    // then a code commit landed: the next chunk of work nudges again.
+    const c = ctx({
+      git: gitFacts({
+        journalCommitTime: 1_000_000,
+        dirtyEntries: [{ path: '.whydone/20260716-x.md', mtimeSec: 6_000_000 }],
+        dirty: ['?? src/a.ts'],
+        listCommitsSince: () => ['abc9999'],
+      }),
+      state: {
+        stateVersion: 1,
+        lastNudge: { sessionId: 'session-1', fingerprint: staleFp, at: 'x', anchor: 5_000_000 },
+      },
+    })
+    expect(decideStop(input({ sessionId: 'session-1' }), c).block).toBe(true)
+  })
+
+  it('same session, nudge honored but dirty-only churn ⇒ allow (uncommitted work never re-nudges)', () => {
+    // The fingerprint changes on every touched file — without the commit
+    // gate this would nudge (and in auto mode, write an entry) every turn.
+    const c = ctx({
+      git: gitFacts({
+        journalCommitTime: 1_000_000,
+        dirtyEntries: [{ path: '.whydone/20260716-x.md', mtimeSec: 6_000_000 }],
+        dirty: ['?? src/a.ts', ' M src/b.ts'],
+        listCommitsSince: () => [],
+      }),
+      state: {
+        stateVersion: 1,
+        lastNudge: { sessionId: 'session-1', fingerprint: staleFp, at: 'x', anchor: 5_000_000 },
       },
     })
     expect(decideStop(input({ sessionId: 'session-1' }), c)).toEqual({ block: false })
@@ -215,8 +270,25 @@ describe('decideStop — debounce (§3.4 step 9)', () => {
     expect(decideStop(input({ sessionId: 'session-2' }), c)).toEqual({ block: false })
   })
 
+  it('same fingerprint SAME session ⇒ allow even when the nudge was honored', () => {
+    // Identical repo state — nothing new to say regardless of session locks.
+    const fp = buildFingerprint('abc123def456', ['?? src/a.ts'])
+    const c = ctx({
+      git: gitFacts({
+        journalCommitTime: 1_000_000,
+        dirtyEntries: [{ path: '.whydone/20260716-x.md', mtimeSec: 6_000_000 }],
+        dirty: ['?? src/a.ts'],
+        listCommitsSince: () => ['abc9999'],
+      }),
+      state: {
+        stateVersion: 1,
+        lastNudge: { sessionId: 'session-1', fingerprint: fp, at: 'x', anchor: 5_000_000 },
+      },
+    })
+    expect(decideStop(input({ sessionId: 'session-1' }), c)).toEqual({ block: false })
+  })
+
   it('changed fingerprint + new session ⇒ block again', () => {
-    const staleFp = buildFingerprint('abc123def456', ['?? src/OLD.ts'])
     const c = ctx({
       git: dirtyGit(),
       state: { stateVersion: 1, lastNudge: { sessionId: 'other', fingerprint: staleFp, at: 'x' } },
@@ -224,7 +296,7 @@ describe('decideStop — debounce (§3.4 step 9)', () => {
     expect(decideStop(input({ sessionId: 'session-2' }), c).block).toBe(true)
   })
 
-  it('block decision carries the new state (session + fingerprint + ISO time)', () => {
+  it('block decision carries the new state (session + fingerprint + ISO time + anchor)', () => {
     const decision = decideStop(input(), ctx({ git: dirtyGit() }))
     expect(decision.block).toBe(true)
     if (!decision.block) return
@@ -233,6 +305,7 @@ describe('decideStop — debounce (§3.4 step 9)', () => {
       buildFingerprint('abc123def456', ['?? src/a.ts']),
     )
     expect(decision.newState.lastNudge?.at).toBe('2026-07-16T12:00:00.000Z')
+    expect(decision.newState.lastNudge?.anchor).toBe(1_000_000)
   })
 })
 

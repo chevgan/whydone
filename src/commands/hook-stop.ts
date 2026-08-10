@@ -101,6 +101,8 @@ export interface HookState {
     sessionId: string
     fingerprint: string
     at: string
+    /** Anchor (epoch sec) at nudge time — absent in pre-1.2.1 state files. */
+    anchor?: number
   }
 }
 
@@ -154,11 +156,24 @@ export function decideStop(input: StopHookInput, ctx: StopContext): StopDecision
   const dirty = ctx.git.dirty
   if (commits.length === 0 && dirty.length === 0) return { block: false }
 
-  // 9. Debounce: once per session AND once per work-fingerprint.
+  // 9. Debounce: once per work-fingerprint, and within a session once per
+  // COMMIT-BOUNDED chunk. Identical state never re-nudges anywhere. Inside
+  // one session the lock releases only when the previous nudge was honored
+  // (an entry moved the anchor past it) AND new non-journal commits exist —
+  // a commit is the user's own "chunk done" marker. Dirty-set churn alone
+  // must never release it: the fingerprint changes on every touched file,
+  // so a bare fingerprint check would nudge every turn (v1.2.1 field case:
+  // one spec entry at session start, then a whole implementation unlogged
+  // because the session lock never released).
   const fingerprint = buildFingerprint(ctx.git.headSha, dirty)
   const last = ctx.state?.lastNudge
-  if (last !== undefined && (last.sessionId === input.sessionId || last.fingerprint === fingerprint)) {
-    return { block: false }
+  if (last !== undefined) {
+    if (last.fingerprint === fingerprint) return { block: false }
+    if (last.sessionId === input.sessionId) {
+      // anchor missing = pre-1.2.1 state file — conservatively unanswered.
+      const honored = last.anchor !== undefined && anchor > last.anchor
+      if (!honored || commits.length === 0) return { block: false }
+    }
   }
 
   // 10. Nudge.
@@ -173,6 +188,7 @@ export function decideStop(input: StopHookInput, ctx: StopContext): StopDecision
         sessionId: input.sessionId,
         fingerprint,
         at: ctx.now.toISOString(),
+        anchor,
       },
     },
   }

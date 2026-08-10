@@ -16528,7 +16528,12 @@ function decideStop(input, ctx) {
 	if (commits.length === 0 && dirty.length === 0) return { block: false };
 	const fingerprint = buildFingerprint(ctx.git.headSha, dirty);
 	const last = ctx.state?.lastNudge;
-	if (last !== void 0 && (last.sessionId === input.sessionId || last.fingerprint === fingerprint)) return { block: false };
+	if (last !== void 0) {
+		if (last.fingerprint === fingerprint) return { block: false };
+		if (last.sessionId === input.sessionId) {
+			if (!(last.anchor !== void 0 && anchor > last.anchor) || commits.length === 0) return { block: false };
+		}
+	}
 	const summary = buildSummary(commits.length, dirty.length);
 	return {
 		block: true,
@@ -16538,7 +16543,8 @@ function decideStop(input, ctx) {
 			lastNudge: {
 				sessionId: input.sessionId,
 				fingerprint,
-				at: ctx.now.toISOString()
+				at: ctx.now.toISOString(),
+				anchor
 			}
 		}
 	};
