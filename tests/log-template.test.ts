@@ -167,6 +167,30 @@ describe('log SKILL.md template', () => {
     expect(content).toContain('never auto-writes an ambiguous entry')
   })
 
+  // ─── Already-logged commits (v1.2.2 field fix) ──────────────────────────────
+  // The window starts at the newest entry's date 00:00, so that day's commits
+  // re-enter every run. Marking them must not depend on file names alone, and
+  // must never gate auto mode — it fired on every normal day-after run.
+
+  it('STEP 1 decides already-logged by date, never by file names alone', () => {
+    expect(content).toContain('%cs')
+    expect(content).toContain('(already logged in <entry-id>)')
+    expect(content).toContain('file names decide nothing here')
+    expect(content).toContain('the delivery of work already described')
+    expect(content).toContain('ordinary new work — never mark it')
+  })
+
+  it('STEP 1 keeps already-logged commits out of the files union', () => {
+    expect(content).toContain('union of files from the commits NOT already logged')
+    expect(content).toContain('An already-logged commit contributes no files of its own')
+  })
+
+  it('STEP 7 no longer degrades auto mode on already-logged commits', () => {
+    expect(content).not.toContain('same-day overlap')
+    expect(content).toContain('Already-logged commits are NOT on that list')
+    expect(content).toContain('flag above (STEP 2) is what stops the write')
+  })
+
   it('STEP 3 defines the MINIMAL VARIANT with the quick trigger', () => {
     expect(content).toContain('MINIMAL VARIANT')
     expect(content).toContain('quick / minimal / быстро / коротко')
