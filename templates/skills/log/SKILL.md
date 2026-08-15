@@ -36,6 +36,9 @@ Plain `npx whydone` (network fetch / install prompt mid-skill) is forbidden. If 
   `hook` (a message starting `whydone: unlogged work detected` appears in the current
   turn), or `self` (anything else — you invoked this skill on your own judgment).
   If TRIGGER is `self`, treat MODE as `ask` for STEP 7 no matter what the config says.
+- SESSION ENTRY = the entry THIS session already wrote, if any — you know its path because
+  you wrote it in this conversation. It is the rewrite target (STEP 4) for as long as it stays
+  uncommitted. No entry written in this conversation ⇒ SESSION ENTRY = none.
 
 ## STEP 1 — Gather git facts (facts only — never paste raw command output into the entry)
 
@@ -52,7 +55,7 @@ Plain `npx whydone` (network fetch / install prompt mid-skill) is forbidden. If 
 
 ## STEP 2 — Empty-work check
 
-If FACTS is empty (no commits in the window other than already-logged ones, clean tree) and not NO_GIT: ask the user — write a decision-only entry from the conversation, or cancel? A decision-only entry omits `## What changed` and `files:`. Under NO_GIT: proceed; the preview states "no git repo — files omitted, entry is conversation-grounded only".
+If FACTS is empty (no commits in the window other than already-logged ones, clean tree) and not NO_GIT: in auto mode write nothing and say nothing — stop here; an unattended pipeline must not manufacture an entry to fill a silence, and a SESSION ENTRY that already covers this state is already correct. In ask/manual, ask the user — write a decision-only entry from the conversation, or cancel? A decision-only entry omits `## What changed` and `files:`. Under NO_GIT: proceed; the preview states "no git repo — files omitted, entry is conversation-grounded only".
 
 ## STEP 3 — Task line
 
@@ -66,10 +69,11 @@ If FACTS is empty (no commits in the window other than already-logged ones, clea
   the schema already permits (empty sections are omitted, not padded). Everything else —
   slug rules, preview, confirm, index, validate — is unchanged. When in doubt, write the
   full entry.
-  In auto mode, trigger (b) is a question, not a decision: size-detected minimal entries
-  fall back to the STEP 7 ask question (only trigger (a) — the user saying quick/минимально —
-  writes a minimal entry unattended). Rationale: the product is named "whydone"; an
-  unattended pipeline must not mass-produce why-less entries that merely duplicate git log.
+  In auto mode trigger (b) does not apply at all — write the FULL entry, never a
+  size-detected minimal one; auto never stops to ask which it should be. Rationale: the
+  product is named "whydone"; an unattended pipeline must not mass-produce why-less entries
+  that merely duplicate git log. Trigger (a) — the user saying quick/минимально — still
+  writes a minimal entry in every mode.
 
 ## STEP 4 — Slug, id, collision
 
@@ -77,7 +81,8 @@ If FACTS is empty (no commits in the window other than already-logged ones, clea
 - If >50 chars: cut at the last hyphen before position 50; if no hyphen exists before position 50 (one long token), hard-cut at 50.
 - Empty-slug fallback chain: if transliteration yields nothing (emoji/symbol-only task) → use a concise English gist of the task; last resort slug is `entry`.
 - `id = <YYYYMMDD-today>-<slug>`; target file `.whydone/<id>.md`.
-- Collision: check the cached listing; if the stem is taken, suffix `-2`, `-3`, … until free, updating BOTH `id` (new stem) AND `slug` (= id minus the 9-char `YYYYMMDD-` prefix, so the suffix is part of the slug, e.g. `slug: fix-auth-2`).
+- REWRITE TARGET: if SESSION ENTRY exists and is still uncommitted (it shows up in `git status --porcelain` as `??` or modified), this run rewrites THAT file — keep its exact stem, `id` and `slug` (the task line may have grown since; the frontmatter identity does not follow it), and skip the collision rules below. One session leaves one entry that keeps up with the session, not a chain of `-2`, `-3` fragments each holding a third of the story. If SESSION ENTRY is already committed it is history: leave it untouched and write a new entry — with `supersedes:` only if this session actually overturned it.
+- Collision (no rewrite target): check the cached listing; if the stem is taken, suffix `-2`, `-3`, … until free, updating BOTH `id` (new stem) AND `slug` (= id minus the 9-char `YYYYMMDD-` prefix, so the suffix is part of the slug, e.g. `slug: fix-auth-2`).
 - Self-check before previewing: date matches `^\d{4}-\d{2}-\d{2}$` and is quoted; slug matches `^[a-z0-9-]+$`; id === filename stem; slug === id.slice(9).
 
 ## STEP 5 — Draft the entry (this is the full schema contract — the target repo has no SCHEMA.md)
@@ -101,6 +106,7 @@ If FACTS is empty (no commits in the window other than already-logged ones, clea
   - `## Gotchas / risks`
   - `## Verify-later / follow-ups` — `- [ ]` checkbox items for anything untested or deferred (the checkbox form is load-bearing: /recall extracts unchecked items).
 - Terseness: whole entry under ~50 lines; bullets 1-2 lines. Body prose in the user's working language; headings stay English verbatim.
+- Rewriting the SESSION ENTRY (STEP 4): redraft it WHOLE from the current facts plus the whole session so far — it replaces the earlier version and must stand alone. Never append a "since the last write" changelog, never keep a stale bullet just because the previous version had it, and keep the follow-ups that are still open.
 
 ## STEP 6 — Security pass (mandatory)
 
@@ -112,26 +118,28 @@ Summarize, never transcribe. Never include: raw command output, environment vari
   `Write .whydone/<stem>.md and update the index? (write / edit: tell me what to change / cancel)`
   `edit` → apply, re-run STEP 4 self-checks + STEP 6 security pass, re-preview. `cancel` → stop.
 - If MODE is auto (which per STEP 0 already requires TRIGGER `user` or `hook` — a `self`
-  trigger was downgraded to ask before reaching this step): SILENT WRITE — print
-  nothing before the write: no facts block, no preview, no question. Proceed straight
-  to STEP 8. The STEP 10 report is the user's only notice, and the written file
-  is the review surface after the fact: git diff for committed journals, the
-  file itself for local ones — a local journal never appears in git diff.
-  AMBIGUITY FALLBACK: if any of these flags is present — supersedes,
-  files truncated, no git repo, empty-work decision-only entry,
-  minimal variant selected by size (STEP 3 trigger b) — fall back to the FULL
-  manual/ask flow above (facts + byte-exact preview + the one question)
-  even in auto mode. Auto mode never auto-writes an ambiguous entry.
-  Already-logged commits are NOT on that list: they are excluded in STEP 1, not a
-  reason to ask. They are the normal state of every window that reaches back into
-  the newest entry's day — gating on them would strand auto mode in the ask flow
-  for good. When they are all the window has and the tree is clean, the empty-work
-  flag above (STEP 2) is what stops the write.
+  trigger was downgraded to ask before reaching this step): SILENT WRITE — print nothing
+  before the write and nothing after it. No facts block, no preview, no question, no
+  report, no closing remark about the journal: STEP 10 is skipped entirely and the whole
+  invocation leaves no prose in the chat. Proceed straight to STEP 8. The written file is
+  the review surface: git diff for committed journals, the file itself for local ones —
+  a local journal never appears in git diff.
+  AUTO NEVER ASKS. Every case where the ask flow would raise a question, auto resolves
+  by acting:
+  - this session already wrote an entry and it is still uncommitted → rewrite that same
+    file whole (STEP 4 REWRITE TARGET, STEP 5) instead of adding a second one;
+  - nothing new to log → write nothing, say nothing (STEP 2);
+  - minimal variant selected by size → write the full entry instead (STEP 3 trigger b);
+  - `files:` truncated at 20 / no git repo / `supersedes` set / commits skipped as already
+    logged → write. These are facts for the entry to carry, not questions for the user;
+    `supersedes` keeps its own guard (uncertain → omit it, never guess).
+  The user picked auto to stop thinking about the journal. A question in auto mode is a bug,
+  and so is a sentence in the chat announcing what was written.
 
 ## STEP 8 — Write + index (single confirmed action)
 
-- Re-run the collision check (re-list `.whydone/`); if the stem appeared meanwhile, bump the suffix, update id AND slug together, and tell the user.
-- Write the file with the Write tool at `ROOT/.whydone/<stem>.md` — exactly the drafted bytes (in manual/ask, exactly what was previewed).
+- Re-run the collision check (re-list `.whydone/`) — skip it when rewriting the SESSION ENTRY, whose stem is supposed to be taken. Otherwise, if the stem appeared meanwhile, bump the suffix, update id AND slug together, and say so (silently in auto: bump and move on).
+- Write the file with the Write tool at `ROOT/.whydone/<stem>.md` — exactly the drafted bytes (in manual/ask, exactly what was previewed). A SESSION ENTRY rewrite overwrites that same path.
 - Update the index, running from ROOT, via the CLI resolution chain:
   1. `node "${CLAUDE_PLUGIN_ROOT}/bin/whydone.mjs" index` (skip on unsubstituted placeholder)
   2. `npx --no-install whydone index`
@@ -146,8 +154,16 @@ Summarize, never transcribe. Never include: raw command output, environment vari
 - Never enter the repair loop for a non-zero exit caused solely by OTHER files' errors — report their count once and never touch them.
 - Own `SUPERSEDES_MISSING` warning: re-check the target id spelling; fix it or drop `supersedes`. Show warnings verbatim.
 
-## STEP 10 — Report
+## STEP 10 — Report (ask/manual only — in auto mode there is no report)
 
-- 3-4 lines: the entry path; index status (rebuilt / NOT updated with the run-later instruction); validation status (clean / N warnings / unresolved errors); if commits were skipped as already logged, their count and the entry that covers them (in auto mode this report is the only place the user learns the window was trimmed); if `supersedes` was set, note the old entry stays untouched as a tombstone.
-- If MODE was auto (no confirm question was asked), append: `auto-written — review it in git diff; delete the file to reject it (it is not yet committed).` Under STORAGE local, append instead: `auto-written — review the file directly; delete it to reject it (a local journal is not tracked by git).`
-- Immutability rule (always-on): never modify or delete an existing entry. Revising a past decision = a NEW entry with `supersedes: <old-id>`; the old entry is a tombstone.
+- In auto mode print NOTHING: no path, no index status, no validation status, no one-liner,
+  no closing remark about the journal — not even when the entry was a rewrite or when commits
+  were skipped as already logged. The file and `git diff` are the notice. Errors are the sole
+  exception: an unresolved validation error or a failed index rebuild is reported in one line,
+  because silence there would hide a broken journal.
+- In ask/manual, 3-4 lines: the entry path; index status (rebuilt / NOT updated with the run-later instruction); validation status (clean / N warnings / unresolved errors); if commits were skipped as already logged, their count and the entry that covers them; if `supersedes` was set, note the old entry stays untouched as a tombstone.
+
+## Immutability (all modes)
+
+- Never modify or delete an entry that is already committed, or that this session did not write. Revising a past decision = a NEW entry with `supersedes: <old-id>`; the old entry is a tombstone.
+- Rewriting THIS session's own still-uncommitted entry (STEP 4 REWRITE TARGET) is not a modification of the record: nothing has entered git history yet, so the session is still writing its first version. The moment that entry is committed it becomes history like any other.

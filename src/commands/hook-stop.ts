@@ -56,8 +56,10 @@ export function buildReasonAuto(summary: string): string {
   return (
     `${NUDGE_PREFIX} — ${summary}. Journal mode is "auto" (user-configured in\n` +
     '.whydone/config.json). Invoke the "log" skill now (Skill tool). Auto mode per the skill\'s\n' +
-    'STEP 7: write the entry and update the index SILENTLY — no preview, no confirmation,\n' +
-    "report only — unless the skill's own ambiguity rules force a question."
+    'STEP 7: write the entry and update the index SILENTLY — no preview, no confirmation, no\n' +
+    'report, and no closing remark about the journal. It never asks: if this session already\n' +
+    'wrote an entry and it is still uncommitted, rewrite that same file; if nothing new happened,\n' +
+    'write nothing and say nothing.'
   )
 }
 
@@ -156,20 +158,23 @@ export function decideStop(input: StopHookInput, ctx: StopContext): StopDecision
   const dirty = ctx.git.dirty
   if (commits.length === 0 && dirty.length === 0) return { block: false }
 
-  // 9. Debounce: once per work-fingerprint, and within a session once per
-  // COMMIT-BOUNDED chunk. Identical state never re-nudges anywhere. Inside
-  // one session the lock releases only when the previous nudge was honored
-  // (an entry moved the anchor past it) AND new non-journal commits exist —
-  // a commit is the user's own "chunk done" marker. Dirty-set churn alone
-  // must never release it: the fingerprint changes on every touched file,
-  // so a bare fingerprint check would nudge every turn (v1.2.1 field case:
+  // 9. Debounce: identical work state never re-nudges, in any mode. Within one
+  // session the rest is mode-shaped, because a nudge costs the user something
+  // different per mode. In ask a nudge is a QUESTION, so it may only repeat once
+  // the previous one was honored (an entry moved the anchor past it) AND new
+  // non-journal commits landed — the user's own "chunk done" marker. Dirty-set
+  // churn must never release that lock: the fingerprint changes on every touched
+  // file, so a bare fingerprint check would ask every turn (v1.2.1 field case:
   // one spec entry at session start, then a whole implementation unlogged
-  // because the session lock never released).
+  // because the session lock never released). In auto a nudge costs nothing
+  // visible — the skill rewrites this session's own uncommitted entry in place,
+  // silently — so every real change re-nudges and the entry keeps up with the
+  // session instead of freezing at whatever the first turn happened to contain.
   const fingerprint = buildFingerprint(ctx.git.headSha, dirty)
   const last = ctx.state?.lastNudge
   if (last !== undefined) {
     if (last.fingerprint === fingerprint) return { block: false }
-    if (last.sessionId === input.sessionId) {
+    if (last.sessionId === input.sessionId && ctx.mode !== 'auto') {
       // anchor missing = pre-1.2.1 state file — conservatively unanswered.
       const honored = last.anchor !== undefined && anchor > last.anchor
       if (!honored || commits.length === 0) return { block: false }

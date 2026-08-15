@@ -16503,8 +16503,10 @@ you may instead tell the user in one line that nothing seems worth logging.`;
 /** REASON_AUTO (§3.7, exact). */
 function buildReasonAuto(summary) {
 	return `${NUDGE_PREFIX} — ${summary}. Journal mode is "auto" (user-configured in\n.whydone/config.json). Invoke the "log" skill now (Skill tool). Auto mode per the skill's
-STEP 7: write the entry and update the index SILENTLY — no preview, no confirmation,
-report only — unless the skill's own ambiguity rules force a question.`;
+STEP 7: write the entry and update the index SILENTLY — no preview, no confirmation, no
+report, and no closing remark about the journal. It never asks: if this session already
+wrote an entry and it is still uncommitted, rewrite that same file; if nothing new happened,
+write nothing and say nothing.`;
 }
 /** sha256(HEAD-sha or 'unborn' + '\n' + sorted dirty lines).slice(0,16) (§3.4 step 9). */
 function buildFingerprint(headSha, dirty) {
@@ -16530,7 +16532,7 @@ function decideStop(input, ctx) {
 	const last = ctx.state?.lastNudge;
 	if (last !== void 0) {
 		if (last.fingerprint === fingerprint) return { block: false };
-		if (last.sessionId === input.sessionId) {
+		if (last.sessionId === input.sessionId && ctx.mode !== "auto") {
 			if (!(last.anchor !== void 0 && anchor > last.anchor) || commits.length === 0) return { block: false };
 		}
 	}

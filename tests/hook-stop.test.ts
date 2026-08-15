@@ -243,9 +243,9 @@ describe('decideStop — debounce (§3.4 step 9)', () => {
     expect(decideStop(input({ sessionId: 'session-1' }), c).block).toBe(true)
   })
 
-  it('same session, nudge honored but dirty-only churn ⇒ allow (uncommitted work never re-nudges)', () => {
+  it('ask mode, same session, nudge honored but dirty-only churn ⇒ allow (a question must not repeat)', () => {
     // The fingerprint changes on every touched file — without the commit
-    // gate this would nudge (and in auto mode, write an entry) every turn.
+    // gate this would ask again every turn.
     const c = ctx({
       git: gitFacts({
         journalCommitTime: 1_000_000,
@@ -294,6 +294,60 @@ describe('decideStop — debounce (§3.4 step 9)', () => {
       state: { stateVersion: 1, lastNudge: { sessionId: 'other', fingerprint: staleFp, at: 'x' } },
     })
     expect(decideStop(input({ sessionId: 'session-2' }), c).block).toBe(true)
+  })
+
+  // ─── Auto mode: the session lock does not apply (v1.3.0) ────────────────────
+  // In ask a nudge is a question, so it waits for a commit-bounded chunk. In
+  // auto it costs nothing visible — the skill silently rewrites this session's
+  // own uncommitted entry — so the entry must track the session, not freeze at
+  // whatever the first turn happened to contain.
+
+  it('auto mode, same session, dirty-only churn ⇒ block (the session entry gets rewritten)', () => {
+    const c = ctx({
+      mode: 'auto',
+      git: gitFacts({
+        journalCommitTime: 1_000_000,
+        dirtyEntries: [{ path: '.whydone/20260716-x.md', mtimeSec: 6_000_000 }],
+        dirty: ['?? src/a.ts', ' M src/b.ts'],
+        listCommitsSince: () => [],
+      }),
+      state: {
+        stateVersion: 1,
+        lastNudge: { sessionId: 'session-1', fingerprint: staleFp, at: 'x', anchor: 5_000_000 },
+      },
+    })
+    expect(decideStop(input({ sessionId: 'session-1' }), c).block).toBe(true)
+  })
+
+  it('auto mode, same session, previous nudge produced no entry ⇒ block (no decline to respect)', () => {
+    // Anchor unchanged since the last nudge: in ask that is a decline and sticks
+    // for the session; in auto nobody was asked, so the write is simply retried.
+    const c = ctx({
+      mode: 'auto',
+      git: gitFacts({
+        journalCommitTime: 1_000_000,
+        dirty: ['?? src/a.ts'],
+        listCommitsSince: () => [],
+      }),
+      state: {
+        stateVersion: 1,
+        lastNudge: { sessionId: 'session-1', fingerprint: staleFp, at: 'x', anchor: 1_000_000 },
+      },
+    })
+    expect(decideStop(input({ sessionId: 'session-1' }), c).block).toBe(true)
+  })
+
+  it('auto mode, identical fingerprint ⇒ allow (unchanged state never rewrites the entry)', () => {
+    const fp = buildFingerprint('abc123def456', ['?? src/a.ts'])
+    const c = ctx({
+      mode: 'auto',
+      git: dirtyGit(),
+      state: {
+        stateVersion: 1,
+        lastNudge: { sessionId: 'session-1', fingerprint: fp, at: 'x', anchor: 1_000_000 },
+      },
+    })
+    expect(decideStop(input({ sessionId: 'session-1' }), c)).toEqual({ block: false })
   })
 
   it('block decision carries the new state (session + fingerprint + ISO time + anchor)', () => {
