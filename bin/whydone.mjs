@@ -4950,7 +4950,7 @@ var require_omap = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var _toString = Object.prototype.toString;
 	function resolveYamlOmap(data) {
 		if (data === null) return true;
-		var objectKeys = [], index, length, pair, pairKey, pairHasKey, object = data;
+		var objectKeys = {}, index, length, pair, pairKey, pairHasKey, object = data;
 		for (index = 0, length = object.length; index < length; index += 1) {
 			pair = object[index];
 			pairHasKey = false;
@@ -4958,8 +4958,8 @@ var require_omap = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 			for (pairKey in pair) if (_hasOwnProperty.call(pair, pairKey)) if (!pairHasKey) pairHasKey = true;
 			else return false;
 			if (!pairHasKey) return false;
-			if (objectKeys.indexOf(pairKey) === -1) objectKeys.push(pairKey);
-			else return false;
+			if (_hasOwnProperty.call(objectKeys, pairKey)) return false;
+			Object.defineProperty(objectKeys, pairKey, { value: true });
 		}
 		return true;
 	}
@@ -10586,6 +10586,7 @@ var require_loader = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		this.legacy = options["legacy"] || false;
 		this.json = options["json"] || false;
 		this.listener = options["listener"] || null;
+		this.maxTotalMergeKeys = typeof options["maxTotalMergeKeys"] === "number" ? options["maxTotalMergeKeys"] : 1e4;
 		this.implicitTypes = this.schema.compiledImplicit;
 		this.typeMap = this.schema.compiledTypeMap;
 		this.length = input.length;
@@ -10593,6 +10594,7 @@ var require_loader = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		this.line = 0;
 		this.lineStart = 0;
 		this.lineIndent = 0;
+		this.totalMergeKeys = 0;
 		this.documents = [];
 	}
 	function generateError(state, message) {
@@ -10641,12 +10643,18 @@ var require_loader = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 			state.result += _result;
 		}
 	}
+	function chargeMergeWork(state) {
+		state.totalMergeKeys += 1;
+		if (state.maxTotalMergeKeys !== -1 && state.totalMergeKeys > state.maxTotalMergeKeys) throwError(state, "merge keys exceeded maxTotalMergeKeys (" + state.maxTotalMergeKeys + ")");
+	}
 	function mergeMappings(state, destination, source, overridableKeys) {
 		var sourceKeys, key, index, quantity;
 		if (!common.isObject(source)) throwError(state, "cannot merge mappings; the provided source object is unacceptable");
+		chargeMergeWork(state);
 		sourceKeys = Object.keys(source);
 		for (index = 0, quantity = sourceKeys.length; index < quantity; index += 1) {
 			key = sourceKeys[index];
+			chargeMergeWork(state);
 			if (!_hasOwnProperty.call(destination, key)) {
 				setProperty(destination, key, source[key]);
 				overridableKeys[key] = true;
@@ -10665,8 +10673,10 @@ var require_loader = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		if (typeof keyNode === "object" && _class(keyNode) === "[object Object]") keyNode = "[object Object]";
 		keyNode = String(keyNode);
 		if (_result === null) _result = {};
-		if (keyTag === "tag:yaml.org,2002:merge") if (Array.isArray(valueNode)) for (index = 0, quantity = valueNode.length; index < quantity; index += 1) mergeMappings(state, _result, valueNode[index], overridableKeys);
-		else mergeMappings(state, _result, valueNode, overridableKeys);
+		if (keyTag === "tag:yaml.org,2002:merge") if (Array.isArray(valueNode)) {
+			if (valueNode.length > 100) throwError(state, "abnormal merge sequence size");
+			for (index = 0, quantity = valueNode.length; index < quantity; index += 1) mergeMappings(state, _result, valueNode[index], overridableKeys);
+		} else mergeMappings(state, _result, valueNode, overridableKeys);
 		else {
 			if (!state.json && !_hasOwnProperty.call(overridableKeys, keyNode) && _hasOwnProperty.call(_result, keyNode)) {
 				state.line = startLine || state.line;
