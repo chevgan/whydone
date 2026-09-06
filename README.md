@@ -365,6 +365,10 @@ Project-level skills in `.claude/skills/` only load after you accept Claude Code
 **Does the journal leak secrets?**
 With the default committed storage, `.whydone/` is committed — in public repos it's public. The `/log` skill summarizes decisions in prose and is instructed never to transcribe command output, env values, or credentials — and it applies the same rules to [local-storage](#private-mode-a-local-only-journal) journals, because `whydone publish` can make any of them public later. Still: review entries like you review diffs.
 
+## Privacy and data
+
+whydone collects nothing and sends nothing. There is no telemetry, no analytics, no account and no network access — the CLI is one self-contained file with zero runtime dependencies, and the Stop hook only reads git state. Everything whydone writes lands in the repository it runs in: journal entries (previewed and confirmed in `ask` mode, written silently only in the opt-in `auto` mode), the generated index, and one small hook-state file under `.whydone/.cache/`. Entries are Claude's short prose summary of what was done and why, never a transcript. The skills run inside your own Claude Code session, so what they read and write passes through the model exactly like any file you open there — whydone adds no channel of its own. The full statement is in [PRIVACY.md](PRIVACY.md).
+
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). The single-file CLI bundles a handful of MIT/ISC-licensed open-source packages; their notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
