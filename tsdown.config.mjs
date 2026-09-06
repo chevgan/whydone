@@ -10,6 +10,9 @@ import { defineConfig } from 'tsdown'
 // dist/cli.js is fully self-contained (zero install-time dependencies for npm
 // consumers, and the same file is vendored verbatim into the plugin channel as
 // cli/whydone.mjs by scripts/sync-plugin-cli.mjs).
+// The bundled packages keep no license headers in the output, so their
+// notices live in THIRD_PARTY_NOTICES.md; tests/third-party-notices.test.ts
+// checks that file against the //#region markers rolldown leaves in the bundle.
 // dts: false also kills declaration sourcemaps — a bin-only package ships no
 // types, and .map files would leak full source text into the tarball.
 export default defineConfig({
