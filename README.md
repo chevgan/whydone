@@ -185,6 +185,16 @@ The mode lives in `.whydone/config.json` and controls two things: whether `/log`
 
 **Disabling:** `--no-hook` at init skips the hook entirely; `npx whydone uninstall` removes it; deleting `.whydone/config.json` (or any broken/missing config) degrades everything to manual. Claude Code's `disableAllHooks` also neutralizes it — ask/auto then simply behave like manual until you run `/log` yourself.
 
+## Journal language
+
+By default `/log` writes entry prose in whatever language you talk to Claude in. That is right for a personal journal and wrong for a public repo with English docs, where the language is a property of the project, not of today's conversation. Pin it in `.whydone/config.json`:
+
+```json
+{ "configVersion": 1, "mode": "ask", "language": "en" }
+```
+
+or `npx whydone init --language en`. Like the mode, it is committed team policy. It affects the task line and the body only: section headings stay English (tooling matches them verbatim) and slugs stay ASCII, so `/recall` keyword matching works the same either way.
+
 ## Private mode: a local-only journal
 
 Some people don't advertise that they work with an AI — company policy, client optics, or simple preference. For them the default journal is hostile: a committed `.whydone/` announces it in every PR. Private mode keeps the full journal loop — `/log`, `/recall`, ranking, the Stop hook — while the journal never touches git:
@@ -210,7 +220,7 @@ Honest limits, in order of importance:
 
 **Plugin teams:** the journal (`.whydone/`) and the CLAUDE.md marker block are committed and travel with the repo; each teammate installs the plugin once on their machine and the whole decision history answers immediately after `git clone` — no per-project setup at all.
 
-**npm teams** additionally commit the skills and pin the version. What's committed: `.whydone/` (entries + config.json — including the journal mode, which is team policy), `.claude/skills/` (the skills), `.claude/whydone.lock.json`, and the CLAUDE.md marker block. What's not: `.claude/settings.local.json` (the Stop hook) and `.whydone/.cache/` (hook state) — both per-machine.
+**npm teams** additionally commit the skills and pin the version. What's committed: `.whydone/` (entries + config.json — including the journal mode and language, which are team policy), `.claude/skills/` (the skills), `.claude/whydone.lock.json`, and the CLAUDE.md marker block. What's not: `.claude/settings.local.json` (the Stop hook) and `.whydone/.cache/` (hook state) — both per-machine.
 
 A teammate after `git clone` (npm channel):
 
@@ -282,6 +292,7 @@ The skills do the AI work; the CLI does everything deterministic. All commands a
 | Flag | Meaning |
 |---|---|
 | `--mode <ask\|auto\|manual>` | Set the journal mode non-interactively; skips the wizard |
+| `--language <tag>` | Language of the entry prose `/log` writes (`en`, `ru`, `pt-BR`); recorded in `config.json` as team policy ([details](#journal-language)) |
 | `--yes` | Accept the recommended setup non-interactively: ask mode + hook |
 | `--journal-only` | Scaffold only `.whydone/` + the CLAUDE.md marker — no skills, lock, or hook (the plugin channel provides those; `/whydone:log` offers this on first run) |
 | `--local` | Private mode: hide the journal from git via `.git/info/exclude`, record `storage: local` ([details](#private-mode-a-local-only-journal)) |

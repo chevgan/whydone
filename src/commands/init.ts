@@ -36,6 +36,7 @@ import {
   readConfigIfValid,
   writeConfigMode,
   isWhydoneMode,
+  isLanguageTag,
   CONFIG_BASENAME,
   type WhydoneMode,
 } from '../lib/config.js'
@@ -99,6 +100,11 @@ export default defineCommand({
     mode: {
       type: 'string',
       description: 'Set journal mode non-interactively (ask | auto | manual)',
+    },
+    language: {
+      type: 'string',
+      description:
+        'Language of the entry prose /log writes, as a tag like en or ru (recorded in .whydone/config.json; default: the language you talk to Claude in)',
     },
     yes: {
       type: 'boolean',
@@ -165,6 +171,12 @@ export default defineCommand({
       process.exit(1)
       return
     }
+    if (args.language !== undefined && !isLanguageTag(args.language)) {
+      process.stderr.write('error: --language must be a language tag like en, ru or pt-BR\n')
+      process.exit(1)
+      return
+    }
+    const languageSuffix = args.language !== undefined ? `, language: ${args.language}` : ''
 
     const cwd = process.cwd()
 
@@ -235,7 +247,7 @@ export default defineCommand({
         process.stdout.write(green('  [create]') + ' ' + dim(path.relative(cwd, journalDir) + '/\n'))
         process.stdout.write(green('  [create]') + ' ' + dim(indexPath + ' (seed, skipped if present)\n'))
         process.stdout.write(green('  [create/update]') + ' ' + dim('CLAUDE.md (marker block)\n'))
-        process.stdout.write(green('  [create]') + ' ' + dim(`${JOURNAL_DIR}/config.json (mode: ${jlMode})\n`))
+        process.stdout.write(green('  [create]') + ' ' + dim(`${JOURNAL_DIR}/config.json (mode: ${jlMode}${languageSuffix})\n`))
         process.stdout.write(green('  [create]') + ' ' + dim(`${JOURNAL_DIR}/.cache/.gitignore\n`))
         if (args.local) {
           process.stdout.write(green('  [update]') + ' ' + dim(`.git/info/exclude (hide ${JOURNAL_DIR}/, storage: local)\n`))
@@ -258,8 +270,14 @@ export default defineCommand({
       // VALID committed mode is only rewritten when --mode was passed this
       // run — plus the invalid-config repair case above and an explicit
       // --local (which must persist storage even into an untouched config).
-      if (!existsSync(configPath) || jlConfigInvalid || args.mode !== undefined || args.local) {
-        await writeConfigMode(journalDir, jlMode, args.local ? 'local' : undefined)
+      if (
+        !existsSync(configPath) ||
+        jlConfigInvalid ||
+        args.mode !== undefined ||
+        args.local ||
+        args.language !== undefined
+      ) {
+        await writeConfigMode(journalDir, jlMode, args.local ? 'local' : undefined, args.language)
         if (jlConfigInvalid) {
           process.stderr.write(
             yellow('warn') + `: ${JOURNAL_DIR}/config.json was invalid — rewritten with mode ${jlMode}\n`,
@@ -301,6 +319,9 @@ export default defineCommand({
       if (!args.quiet) {
         const jlLocal = jlStorage === 'local'
         const jlModeLine = jlLocal ? MODE_LINE_LOCAL[jlMode] : MODE_LINE[jlMode]
+        const jlLanguage = args.language ?? jlExisting?.language
+        const jlLanguageLine =
+          jlLanguage !== undefined ? `  Language:     ${jlLanguage} (entry prose; .whydone/config.json)\n` : ''
         const tail = jlLocal
           ? jlNoGit
             ? '  Storage:      local (no git repo here — nothing was excluded; the journal is machine-only)\n'
@@ -312,6 +333,7 @@ export default defineCommand({
             ' complete\n' +
             `  Journal dir:  ${dim(path.relative(cwd, journalDir) + '/')}\n` +
             `  Mode:         ${jlModeLine}\n` +
+            jlLanguageLine +
             '  CLAUDE.md:    marker block added/refreshed\n' +
             '  Skipped:      skills, lock-file, Stop hook — the plugin ships them;\n' +
             '                on the npm channel run `npx whydone init` for the full setup\n' +
@@ -443,7 +465,7 @@ export default defineCommand({
       process.stdout.write(green('  [create]') + ' ' + dim(path.join(path.relative(cwd, skillsDir), 'recall', 'SKILL.md') + '\n'))
       process.stdout.write(green('  [create/update]') + ' ' + dim('CLAUDE.md (marker block)\n'))
       process.stdout.write(green('  [create]') + ' ' + dim(path.relative(cwd, lockPath) + '\n'))
-      process.stdout.write(green('  [create]') + ' ' + dim(`${JOURNAL_DIR}/config.json (mode: ${mode})\n`))
+      process.stdout.write(green('  [create]') + ' ' + dim(`${JOURNAL_DIR}/config.json (mode: ${mode}${languageSuffix})\n`))
       process.stdout.write(green('  [create]') + ' ' + dim(`${JOURNAL_DIR}/.cache/.gitignore\n`))
       if (installHook) {
         process.stdout.write(green('  [create/update]') + ' ' + dim(`${settingsDisplay} (Stop hook)\n`))
@@ -499,11 +521,18 @@ export default defineCommand({
     // this run. A bare non-interactive re-run leaves an existing config
     // byte-untouched (preserves committed team policy, no CI churn).
     const configInvalid = existsSync(configPath) && existingConfig === null
-    if (!existsSync(configPath) || configInvalid || explicit || useLocal) {
+    if (
+      !existsSync(configPath) ||
+      configInvalid ||
+      explicit ||
+      useLocal ||
+      args.language !== undefined
+    ) {
       await writeConfigMode(
         journalDir,
         mode,
         useLocal ? 'local' : wizardAskedStorage ? 'committed' : undefined,
+        args.language,
       )
       if (configInvalid) {
         process.stderr.write(
@@ -628,6 +657,9 @@ export default defineCommand({
       const claudeMdDisplay = args.global ? '~/.claude/CLAUDE.md' : 'CLAUDE.md'
       const effLocal = useLocal || existingConfig?.storage === 'local'
       const fullModeLine = effLocal ? MODE_LINE_LOCAL[mode] : MODE_LINE[mode]
+      const effLanguage = args.language ?? existingConfig?.language
+      const languageLine =
+        effLanguage !== undefined ? `  Language:         ${effLanguage} (entry prose; .whydone/config.json)\n` : ''
       const storageLine = effLocal
         ? localNoGit
           ? '  Storage:          local (no git repo here — nothing to exclude)\n'
@@ -646,6 +678,7 @@ export default defineCommand({
           `  Journal dir:      ${dim(path.relative(cwd, journalDir) + '/')}\n` +
           `  Lock-file:        ${dim(path.relative(cwd, lockPath))}\n` +
           `  Mode:             ${fullModeLine}\n` +
+          languageLine +
           storageLine +
           `  Stop hook:        ${hookLine}\n` +
           '\n' +

@@ -845,6 +845,14 @@ function isWhydoneMode(value) {
 function asStorage(value) {
 	return value === "local" ? "local" : "committed";
 }
+/** Type guard for the language tag accepted by --language and read from config. */
+function isLanguageTag(value) {
+	return typeof value === "string" && LANGUAGE_RE.test(value);
+}
+/** Lenient language reader: a malformed value reads as absent. */
+function asLanguage(value) {
+	return isLanguageTag(value) ? value : void 0;
+}
 /**
 * Read the config strictly: returns the parsed config only when the file
 * exists, parses, has configVersion === 1, and a valid mode. Otherwise null.
@@ -858,9 +866,14 @@ async function readConfigIfValid(journalDir) {
 		const obj = parsed;
 		if (obj.configVersion !== 1) return null;
 		if (!isWhydoneMode(obj.mode)) return null;
-		return {
+		const language = asLanguage(obj.language);
+		return language === void 0 ? {
 			mode: obj.mode,
 			storage: asStorage(obj.storage)
+		} : {
+			mode: obj.mode,
+			storage: asStorage(obj.storage),
+			language
 		};
 	} catch {
 		return null;
@@ -878,12 +891,14 @@ async function readConfig(journalDir) {
 }
 /**
 * Create or update .whydone/config.json with the given mode (and optionally
-* storage). Read-modify-write: unknown keys in an existing (parseable) file
-* are preserved (design §1.1). storage is only written when passed explicitly
-* or already present — a v0.3-era two-key config stays byte-stable across
-* mode-only rewrites. Serialized with JSON.stringify(_, null, 2).
+* storage / language). Read-modify-write: unknown keys in an existing
+* (parseable) file are preserved (design §1.1). storage and language are only
+* written when passed explicitly or already present — a v0.3-era two-key
+* config stays byte-stable across mode-only rewrites, and a hide/publish
+* storage flip never drops a configured language. Serialized with
+* JSON.stringify(_, null, 2).
 */
-async function writeConfigMode(journalDir, mode, storage) {
+async function writeConfigMode(journalDir, mode, storage, language) {
 	const configPath = path.join(journalDir, CONFIG_BASENAME);
 	let existing = {};
 	try {
@@ -896,9 +911,10 @@ async function writeConfigMode(journalDir, mode, storage) {
 		mode
 	};
 	if (storage !== void 0) next.storage = storage;
+	if (language !== void 0) next.language = language;
 	await writeFile(configPath, JSON.stringify(next, null, 2), "utf-8");
 }
-var CONFIG_BASENAME, VALID_MODES;
+var CONFIG_BASENAME, VALID_MODES, LANGUAGE_RE;
 var init_config = __esmMin((() => {
 	CONFIG_BASENAME = "config.json";
 	VALID_MODES = new Set([
@@ -906,6 +922,7 @@ var init_config = __esmMin((() => {
 		"auto",
 		"manual"
 	]);
+	LANGUAGE_RE = /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/;
 }));
 //#endregion
 //#region src/lib/settings-hooks.ts
@@ -15161,6 +15178,10 @@ var init_init = __esmMin((() => {
 				type: "string",
 				description: "Set journal mode non-interactively (ask | auto | manual)"
 			},
+			language: {
+				type: "string",
+				description: "Language of the entry prose /log writes, as a tag like en or ru (recorded in .whydone/config.json; default: the language you talk to Claude in)"
+			},
 			yes: {
 				type: "boolean",
 				description: "Accept the recommended setup non-interactively: mode ask + Stop hook",
@@ -15218,6 +15239,12 @@ var init_init = __esmMin((() => {
 				process.exit(1);
 				return;
 			}
+			if (args.language !== void 0 && !isLanguageTag(args.language)) {
+				process.stderr.write("error: --language must be a language tag like en, ru or pt-BR\n");
+				process.exit(1);
+				return;
+			}
+			const languageSuffix = args.language !== void 0 ? `, language: ${args.language}` : "";
 			const cwd = process.cwd();
 			const scope = args.global ? "global" : "project";
 			const targetBase = args.global ? path.join(homedir(), ".claude") : path.resolve(cwd, ".claude");
@@ -15256,7 +15283,7 @@ var init_init = __esmMin((() => {
 					process.stdout.write(green("  [create]") + " " + dim(path.relative(cwd, journalDir) + "/\n"));
 					process.stdout.write(green("  [create]") + " " + dim(indexPath + " (seed, skipped if present)\n"));
 					process.stdout.write(green("  [create/update]") + " " + dim("CLAUDE.md (marker block)\n"));
-					process.stdout.write(green("  [create]") + " " + dim(`${JOURNAL_DIR}/config.json (mode: ${jlMode})\n`));
+					process.stdout.write(green("  [create]") + " " + dim(`${JOURNAL_DIR}/config.json (mode: ${jlMode}${languageSuffix})\n`));
 					process.stdout.write(green("  [create]") + " " + dim(`${JOURNAL_DIR}/.cache/.gitignore\n`));
 					if (args.local) process.stdout.write(green("  [update]") + " " + dim(`.git/info/exclude (hide ${JOURNAL_DIR}/, storage: local)\n`));
 					process.stdout.write(green("  [skip]") + " " + dim("skills, lock-file, Stop hook (--journal-only)\n"));
@@ -15272,8 +15299,8 @@ var init_init = __esmMin((() => {
 					if (err.code !== "EEXIST") throw err;
 				}
 				await patchClaudeMd(claudeMdPath, indexPath, "project");
-				if (!existsSync(configPath) || jlConfigInvalid || args.mode !== void 0 || args.local) {
-					await writeConfigMode(journalDir, jlMode, args.local ? "local" : void 0);
+				if (!existsSync(configPath) || jlConfigInvalid || args.mode !== void 0 || args.local || args.language !== void 0) {
+					await writeConfigMode(journalDir, jlMode, args.local ? "local" : void 0, args.language);
 					if (jlConfigInvalid) process.stderr.write(yellow("warn") + `: ${JOURNAL_DIR}/config.json was invalid — rewritten with mode ${jlMode}\n`);
 				}
 				const jlStorage = args.local ? "local" : jlExisting?.storage ?? "committed";
@@ -15300,13 +15327,11 @@ var init_init = __esmMin((() => {
 				if (!args.quiet) {
 					const jlLocal = jlStorage === "local";
 					const jlModeLine = jlLocal ? MODE_LINE_LOCAL[jlMode] : MODE_LINE[jlMode];
+					const jlLanguage = args.language ?? jlExisting?.language;
+					const jlLanguageLine = jlLanguage !== void 0 ? `  Language:     ${jlLanguage} (entry prose; .whydone/config.json)\n` : "";
 					const tail = jlLocal ? jlNoGit ? "  Storage:      local (no git repo here — nothing was excluded; the journal is machine-only)\n" : "  Storage:      LOCAL-ONLY — hidden via .git/info/exclude, never committed, no backup.\n                Make it a committed team journal later: whydone publish\n" : "  Commit the shared parts: git add " + JOURNAL_DIR + " CLAUDE.md\n";
 					process.stdout.write(bold("whydone init --journal-only") + ` complete
-  Journal dir:  ${dim(path.relative(cwd, journalDir) + "/")}\n  Mode:         ${jlModeLine}\n  CLAUDE.md:    marker block added/refreshed
-  Skipped:      skills, lock-file, Stop hook — the plugin ships them;
-                on the npm channel run \`npx whydone init\` for the full setup
-
-` + tail);
+  Journal dir:  ${dim(path.relative(cwd, journalDir) + "/")}\n  Mode:         ${jlModeLine}\n` + jlLanguageLine + "  CLAUDE.md:    marker block added/refreshed\n  Skipped:      skills, lock-file, Stop hook — the plugin ships them;\n                on the npm channel run `npx whydone init` for the full setup\n\n" + tail);
 				}
 				return;
 			}
@@ -15404,7 +15429,7 @@ Required for ask/auto to trigger automatically. Remove anytime: npx whydone unin
 				process.stdout.write(green("  [create]") + " " + dim(path.join(path.relative(cwd, skillsDir), "recall", "SKILL.md") + "\n"));
 				process.stdout.write(green("  [create/update]") + " " + dim("CLAUDE.md (marker block)\n"));
 				process.stdout.write(green("  [create]") + " " + dim(path.relative(cwd, lockPath) + "\n"));
-				process.stdout.write(green("  [create]") + " " + dim(`${JOURNAL_DIR}/config.json (mode: ${mode})\n`));
+				process.stdout.write(green("  [create]") + " " + dim(`${JOURNAL_DIR}/config.json (mode: ${mode}${languageSuffix})\n`));
 				process.stdout.write(green("  [create]") + " " + dim(`${JOURNAL_DIR}/.cache/.gitignore\n`));
 				if (installHook) process.stdout.write(green("  [create/update]") + " " + dim(`${settingsDisplay} (Stop hook)\n`));
 				else {
@@ -15433,8 +15458,8 @@ Required for ask/auto to trigger automatically. Remove anytime: npx whydone unin
 			const result = await copySkills(TEMPLATES_DIR$1, skillsDir, { force: args.force });
 			await patchClaudeMd(claudeMdPath, indexPath, scope);
 			const configInvalid = existsSync(configPath) && existingConfig === null;
-			if (!existsSync(configPath) || configInvalid || explicit || useLocal) {
-				await writeConfigMode(journalDir, mode, useLocal ? "local" : wizardAskedStorage ? "committed" : void 0);
+			if (!existsSync(configPath) || configInvalid || explicit || useLocal || args.language !== void 0) {
+				await writeConfigMode(journalDir, mode, useLocal ? "local" : wizardAskedStorage ? "committed" : void 0, args.language);
 				if (configInvalid) process.stderr.write(yellow("warn") + `: ${JOURNAL_DIR}/config.json was invalid — rewritten with mode ${mode}\n`);
 			}
 			await mkdir(path.join(journalDir, ".cache"), { recursive: true });
@@ -15509,10 +15534,12 @@ Required for ask/auto to trigger automatically. Remove anytime: npx whydone unin
 				const claudeMdDisplay = args.global ? "~/.claude/CLAUDE.md" : "CLAUDE.md";
 				const effLocal = useLocal || existingConfig?.storage === "local";
 				const fullModeLine = effLocal ? MODE_LINE_LOCAL[mode] : MODE_LINE[mode];
+				const effLanguage = args.language ?? existingConfig?.language;
+				const languageLine = effLanguage !== void 0 ? `  Language:         ${effLanguage} (entry prose; .whydone/config.json)\n` : "";
 				const storageLine = effLocal ? localNoGit ? "  Storage:          local (no git repo here — nothing to exclude)\n" : "  Storage:          LOCAL-ONLY — .whydone/ hidden via .git/info/exclude; no backup. `whydone publish` reverses.\n" : "";
 				const step3 = effLocal ? "  3. The journal is local-only — nothing of it to commit. Commit the tooling if you want:\n       git add .claude/skills .claude/whydone.lock.json\n" : "  3. Commit the shared parts:\n       git add .whydone .claude/skills .claude/whydone.lock.json CLAUDE.md\n     (.claude/settings.local.json stays local — teammates run `npx whydone init` once after cloning.)\n";
 				process.stdout.write(bold("whydone init") + ` complete
-  Skills installed: ${green(String(installed))}, skipped: ${dim(String(skipped))}\n  Journal dir:      ${dim(path.relative(cwd, journalDir) + "/")}\n  Lock-file:        ${dim(path.relative(cwd, lockPath))}\n  Mode:             ${fullModeLine}\n` + storageLine + `  Stop hook:        ${hookLine}\n
+  Skills installed: ${green(String(installed))}, skipped: ${dim(String(skipped))}\n  Journal dir:      ${dim(path.relative(cwd, journalDir) + "/")}\n  Lock-file:        ${dim(path.relative(cwd, lockPath))}\n  Mode:             ${fullModeLine}\n` + languageLine + storageLine + `  Stop hook:        ${hookLine}\n
 Next steps:
   1. ${claudeMdDisplay} was updated — accept the workspace-trust prompt next session so project skills load.\n  2. Start a NEW Claude Code session: skills, hooks, and CLAUDE.md are read at session start.
 ` + step3 + "  4. Finish any task, then run /log — in ask or auto mode whydone will also offer it by itself.\n\nRemove everything: npx whydone uninstall   (add --purge to also delete .whydone/)\n");

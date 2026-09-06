@@ -473,3 +473,80 @@ describe('init --journal-only (plugin channel bootstrap)', () => {
     expect(content).toContain('built from entries')
   })
 })
+
+describe('init --language (journal language as committed policy)', () => {
+  let projectDir: string
+
+  beforeEach(async () => {
+    projectDir = await mkdtemp(path.join(tmpdir(), 'whydone-init-lang-test-'))
+  })
+
+  afterEach(async () => {
+    await rm(projectDir, { recursive: true, force: true })
+  })
+
+  const readCfg = async () =>
+    JSON.parse(await readFile(path.join(projectDir, '.whydone', 'config.json'), 'utf-8'))
+
+  it('--language en is written to config.json on a fresh non-TTY init (mode stays the bare default)', async () => {
+    await runInit(projectDir, { language: 'en' })
+    expect(await readCfg()).toEqual({ configVersion: 1, mode: 'manual', language: 'en' })
+  })
+
+  it('--journal-only --language ru records it next to the ask default', async () => {
+    await runInit(projectDir, { 'journal-only': true, language: 'ru' })
+    expect(await readCfg()).toEqual({ configVersion: 1, mode: 'ask', language: 'ru' })
+  })
+
+  it('a bare re-run keeps the language; --language alone updates it without touching the mode', async () => {
+    await runInit(projectDir, { mode: 'ask', hook: false, language: 'en' })
+    await runInit(projectDir)
+    expect(await readCfg()).toEqual({ configVersion: 1, mode: 'ask', language: 'en' })
+    await runInit(projectDir, { language: 'de' })
+    expect(await readCfg()).toEqual({ configVersion: 1, mode: 'ask', language: 'de' })
+  })
+
+  it('--language "English (US)" exits 1 with the exact error before any write', async () => {
+    const originalCwd = process.cwd()
+    process.chdir(projectDir)
+    let exitCode: number | undefined
+    const originalExit = process.exit
+    process.exit = ((code?: number | string) => {
+      exitCode = typeof code === 'string' ? parseInt(code, 10) : code
+      throw new Error(`process.exit(${code})`)
+    }) as typeof process.exit
+    const stderrChunks: string[] = []
+    const originalStderr = process.stderr.write.bind(process.stderr)
+    // @ts-ignore
+    process.stderr.write = (chunk: unknown) => { stderrChunks.push(String(chunk)); return true }
+    try {
+      await expect(
+        (initCommand as any).run({
+          args: { force: false, global: false, 'dry-run': false, quiet: true, 'no-color': true, yes: false, hook: true, language: 'English (US)' },
+        }),
+      ).rejects.toThrow('process.exit(1)')
+    } finally {
+      process.exit = originalExit
+      // @ts-ignore
+      process.stderr.write = originalStderr
+      process.chdir(originalCwd)
+    }
+    expect(exitCode).toBe(1)
+    expect(stderrChunks.join('')).toContain('error: --language must be a language tag like en, ru or pt-BR')
+    await expect(access(path.join(projectDir, '.whydone'))).rejects.toThrow()
+  })
+
+  it('the result block reports the language (full init and --journal-only)', async () => {
+    const full = await runInitCaptured(projectDir, { mode: 'manual', language: 'en' })
+    expect(full).toContain('Language:         en (entry prose; .whydone/config.json)')
+    const jl = await runInitCaptured(projectDir, { 'journal-only': true })
+    // No --language this run: the line still shows the committed policy.
+    expect(jl).toContain('Language:     en (entry prose; .whydone/config.json)')
+  })
+
+  it('--dry-run mentions the language in the config plan line and writes nothing', async () => {
+    const out = await runInitCaptured(projectDir, { 'dry-run': true, language: 'en' })
+    expect(out).toContain('config.json (mode: manual, language: en)')
+    await expect(access(path.join(projectDir, '.whydone'))).rejects.toThrow()
+  })
+})

@@ -231,4 +231,13 @@ describe('log SKILL.md template', () => {
     expect(content).toContain('The written file is')
     expect(content).toContain('git diff for committed journals')
   })
+
+  // ─── Journal language (config.json `language`) ──────────────────────────────
+
+  it('STEP 0 reads LANGUAGE from config.json and confines it to the task line and body prose', () => {
+    expect(content).toContain('LANGUAGE = its `language` value')
+    expect(content).toContain('headings and the slug never follow it')
+    expect(content).toContain('in LANGUAGE (STEP 0), summarizing')
+    expect(content).toContain('Body prose and the task line in LANGUAGE')
+  })
 })

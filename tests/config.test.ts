@@ -9,7 +9,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { readConfig, readConfigIfValid, writeConfigMode } from '../src/lib/config.js'
+import { isLanguageTag, readConfig, readConfigIfValid, writeConfigMode } from '../src/lib/config.js'
 
 describe('readConfig', () => {
   let journalDir: string
@@ -86,5 +86,58 @@ describe('readConfig', () => {
     expect(await readConfigIfValid(journalDir)).toBeNull()
     await writeConfigMode(journalDir, 'manual')
     expect(await readConfigIfValid(journalDir)).toEqual({ mode: 'manual', storage: 'committed' })
+  })
+})
+
+describe('language (config key honored by /log)', () => {
+  let journalDir: string
+
+  beforeEach(async () => {
+    journalDir = await mkdtemp(path.join(tmpdir(), 'whydone-config-lang-'))
+  })
+
+  afterEach(async () => {
+    await rm(journalDir, { recursive: true, force: true })
+  })
+
+  const configPath = () => path.join(journalDir, 'config.json')
+
+  it('round-trips through writeConfigMode and readConfig', async () => {
+    await writeConfigMode(journalDir, 'ask', undefined, 'en')
+    expect(await readConfig(journalDir)).toEqual({ mode: 'ask', storage: 'committed', language: 'en' })
+    const raw = await readFile(configPath(), 'utf-8')
+    expect(raw).toBe(JSON.stringify({ configVersion: 1, mode: 'ask', language: 'en' }, null, 2))
+  })
+
+  it('absent language ⇒ no key at all (never null, never a default)', async () => {
+    await writeConfigMode(journalDir, 'ask')
+    const cfg = await readConfig(journalDir)
+    expect('language' in cfg).toBe(false)
+  })
+
+  it('a malformed language reads as absent — the skill falls back to the working language', async () => {
+    for (const bad of ['English (US)', 42, null, '']) {
+      await writeFile(configPath(), JSON.stringify({ configVersion: 1, mode: 'ask', language: bad }), 'utf-8')
+      const cfg = await readConfig(journalDir)
+      expect(cfg.mode, String(bad)).toBe('ask')
+      expect('language' in cfg, String(bad)).toBe(false)
+    }
+  })
+
+  it('survives mode-only and storage-only rewrites (init --mode, hide, publish)', async () => {
+    await writeConfigMode(journalDir, 'ask', undefined, 'ru')
+    await writeConfigMode(journalDir, 'auto')
+    await writeConfigMode(journalDir, 'auto', 'local')
+    const parsed = JSON.parse(await readFile(configPath(), 'utf-8'))
+    expect(parsed).toEqual({ configVersion: 1, mode: 'auto', language: 'ru', storage: 'local' })
+  })
+
+  it('isLanguageTag accepts BCP-47-shaped tags only', () => {
+    for (const ok of ['en', 'ru', 'pt-BR', 'zh-Hant', 'sr-Latn-RS']) {
+      expect(isLanguageTag(ok), ok).toBe(true)
+    }
+    for (const bad of ['', 'e', 'english', 'en_US', 'en-', 'en US', 42, null, undefined]) {
+      expect(isLanguageTag(bad), String(bad)).toBe(false)
+    }
   })
 })

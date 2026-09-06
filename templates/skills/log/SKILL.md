@@ -32,6 +32,11 @@ Plain `npx whydone` (network fetch / install prompt mid-skill) is forbidden. If 
   unknown value) MODE = manual. MODE changes STEP 7 only — every other step is identical.
   From the same file: STORAGE = `local` if `storage` is exactly `"local"`, else `committed`.
   STORAGE changes the STEP 6 framing only.
+  From the same file: LANGUAGE = its `language` value when it is a non-empty string (a tag
+  such as `en` or `ru`); otherwise LANGUAGE = the language the user writes to you in.
+  LANGUAGE changes the wording of the task line (STEP 3) and the body prose (STEP 5) only —
+  headings and the slug never follow it. It is committed team policy: a public repo with
+  English docs wants `en` no matter which language this conversation is in.
 - TRIGGER = how this invocation happened: `user` (the user explicitly asked to log),
   `hook` (a message starting `whydone: unlogged work detected` appears in the current
   turn), or `self` (anything else — you invoked this skill on your own judgment).
@@ -59,7 +64,7 @@ If FACTS is empty (no commits in the window other than already-logged ones, clea
 
 ## STEP 3 — Task line
 
-`$ARGUMENTS`, if present, is the focus steer; otherwise write ONE imperative line summarizing the session's main accomplishment. This becomes `task:` and the slug source. Infer status — never ask: `done` (default, omit the field); `wip` if knowingly unfinished; `blocked` if stopped externally — the blocker MUST then appear under `## Gotchas / risks`.
+`$ARGUMENTS`, if present, is the focus steer; otherwise write ONE imperative line, in LANGUAGE (STEP 0), summarizing the session's main accomplishment. This becomes `task:` and the slug source. Infer status — never ask: `done` (default, omit the field); `wip` if knowingly unfinished; `blocked` if stopped externally — the blocker MUST then appear under `## Gotchas / risks`.
 
 - MINIMAL VARIANT: use it when (a) $ARGUMENTS or the user's request contains
   quick / minimal / быстро / коротко, or (b) FACTS is small — at most 2 files and at most
@@ -105,7 +110,7 @@ If FACTS is empty (no commits in the window other than already-logged ones, clea
   - `## Alternatives rejected` — only options genuinely considered, one-line reason each.
   - `## Gotchas / risks`
   - `## Verify-later / follow-ups` — `- [ ]` checkbox items for anything untested or deferred (the checkbox form is load-bearing: /recall extracts unchecked items).
-- Terseness: whole entry under ~50 lines; bullets 1-2 lines. Body prose in the user's working language; headings stay English verbatim.
+- Terseness: whole entry under ~50 lines; bullets 1-2 lines. Body prose and the task line in LANGUAGE (STEP 0); headings stay English verbatim; the slug is always ASCII.
 - Rewriting the SESSION ENTRY (STEP 4): redraft it WHOLE from the current facts plus the whole session so far — it replaces the earlier version and must stand alone. Never append a "since the last write" changelog, never keep a stale bullet just because the previous version had it, and keep the follow-ups that are still open.
 
 ## STEP 6 — Security pass (mandatory)
