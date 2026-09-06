@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Only the latest 0.x release receives security fixes.
+Only the latest release receives security fixes; there are no maintenance branches for older versions.
 
 ## Threat model
 

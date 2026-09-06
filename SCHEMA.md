@@ -182,7 +182,7 @@ The `/log` write skill and any human author must follow this principle. Claude s
 
 ## Annotated Template
 
-See `.whydone/20260601-design-entry-schema.md` for the canonical annotated example entry. It shows every frontmatter field with inline YAML comments explaining each field's purpose and rules, and all five canonical body sections with real prose.
+See `tests/fixtures/20260601-design-entry-schema.md` for the canonical annotated example entry (the test suite validates it on every run). It shows every frontmatter field with inline YAML comments explaining each field's purpose and rules, and all five canonical body sections with real prose.
 
 A minimal valid entry needs only the five required fields and whichever body sections are non-empty:
 
