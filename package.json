@@ -37,7 +37,7 @@
     "templates"
   ],
   "scripts": {
-    "build": "tsdown --config-loader native && node scripts/sync-plugin-bin.mjs",
+    "build": "tsdown --config-loader native && node scripts/sync-plugin-cli.mjs",
     "prepack": "node scripts/check-versions.mjs && npm run build",
     "dev": "tsdown --watch",
     "test": "vitest run",

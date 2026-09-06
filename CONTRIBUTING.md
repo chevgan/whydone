@@ -5,12 +5,12 @@
 ```bash
 npm ci
 npm test          # vitest run
-npm run build     # tsdown -> dist/cli.js, then synced to bin/whydone.mjs
+npm run build     # tsdown -> dist/cli.js, then synced to cli/whydone.mjs
 ```
 
 Node >= 20.19. ESM only.
 
-`bin/whydone.mjs` is a **committed build artifact** — the plugin channel's vendored CLI, copied from `dist/cli.js` by `scripts/sync-plugin-bin.mjs`. Never edit it by hand; run `npm run build` and commit the regenerated file together with your `src/` change (CI fails on drift via `git diff --exit-code -- bin`).
+`cli/whydone.mjs` is a **committed build artifact** — the plugin channel's vendored CLI, copied from `dist/cli.js` by `scripts/sync-plugin-cli.mjs`. Never edit it by hand; run `npm run build` and commit the regenerated file together with your `src/` change (CI fails on drift via `git diff --exit-code -- cli`).
 
 ## Ground rules
 

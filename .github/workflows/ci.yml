@@ -16,7 +16,7 @@ jobs:
         with: { node-version: "${{ matrix.node }}", cache: npm }
       - run: npm ci
       - run: npm run build
-      - run: git ls-files --error-unmatch bin/whydone.mjs && git diff --exit-code -- bin   # vendored plugin CLI must be tracked AND rebuilt+committed together
+      - run: git ls-files --error-unmatch cli/whydone.mjs && git diff --exit-code -- cli   # vendored plugin CLI must be tracked AND rebuilt+committed together
         shell: bash
       - run: npm test
       - run: node scripts/check-versions.mjs

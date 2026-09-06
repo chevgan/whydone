@@ -38,10 +38,10 @@ import type { LockFile } from '../types.js'
 // Resolve package root from this file's location.
 // - src/commands/update.ts (dev): __dirname = src/commands/ → 2 levels up → pkg root
 // - dist/cli.js (bundled): tsdown flattens into dist/ so __dirname = dist/ → 1 level up
-// - bin/whydone.mjs (plugin-vendored bundle): __dirname = bin/ → 1 level up = plugin root
+// - cli/whydone.mjs (plugin-vendored bundle): __dirname = cli/ → 1 level up = plugin root
 // Detect the case by checking the basename of __dirname.
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const PKG_ROOT = path.basename(__dirname) === 'dist' || path.basename(__dirname) === 'bin'
+const PKG_ROOT = path.basename(__dirname) === 'dist' || path.basename(__dirname) === 'cli'
   ? path.resolve(__dirname, '..')
   : path.resolve(__dirname, '..', '..')
 const TEMPLATES_DIR = path.join(PKG_ROOT, 'templates', 'skills')

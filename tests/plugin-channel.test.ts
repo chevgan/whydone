@@ -2,7 +2,7 @@
  * Plugin-channel contract tests.
  *
  * The plugin serves the same templates/skills/ but carries its own CLI copy
- * (bin/whydone.mjs, vendored from dist/cli.js by scripts/sync-plugin-bin.mjs)
+ * (cli/whydone.mjs, vendored from dist/cli.js by scripts/sync-plugin-cli.mjs)
  * and its own Stop hook (hooks/hooks.json). These tests pin the cross-file
  * agreement: every reference to the vendored CLI must use the exact same
  * ${CLAUDE_PLUGIN_ROOT}-relative path, and the hook must call the same
@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.join(__dirname, '..')
 
-const VENDORED_CLI = '${CLAUDE_PLUGIN_ROOT}/bin/whydone.mjs'
+const VENDORED_CLI = '${CLAUDE_PLUGIN_ROOT}/cli/whydone.mjs'
 
 const readJson = (p: string) => JSON.parse(readFileSync(path.join(ROOT, p), 'utf-8'))
 const readText = (p: string) => readFileSync(path.join(ROOT, p), 'utf-8')
@@ -65,10 +65,10 @@ describe('vendored-CLI path consistency across the plugin surface', () => {
     }
   })
 
-  it('sync-plugin-bin.mjs produces the path the hook and skills reference', () => {
-    const script = readText('scripts/sync-plugin-bin.mjs')
-    expect(script).toContain("'bin/whydone.mjs'")
+  it('sync-plugin-cli.mjs produces the path the hook and skills reference', () => {
+    const script = readText('scripts/sync-plugin-cli.mjs')
+    expect(script).toContain("'cli/whydone.mjs'")
     // hooks.json path minus the plugin-root placeholder
-    expect(VENDORED_CLI.replace('${CLAUDE_PLUGIN_ROOT}/', '')).toBe('bin/whydone.mjs')
+    expect(VENDORED_CLI.replace('${CLAUDE_PLUGIN_ROOT}/', '')).toBe('cli/whydone.mjs')
   })
 })

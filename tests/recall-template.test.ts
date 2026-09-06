@@ -57,7 +57,7 @@ describe('recall SKILL.md — frontmatter', () => {
   it('allowed-tools pre-approves the plugin-vendored CLI invocation', () => {
     const allowedTools = parsed.data['allowed-tools'] as string
     const tools = allowedTools.split(',').map((t) => t.trim())
-    expect(tools).toContain('Bash(node "${CLAUDE_PLUGIN_ROOT}/bin/whydone.mjs" recall:*)')
+    expect(tools).toContain('Bash(node "${CLAUDE_PLUGIN_ROOT}/cli/whydone.mjs" recall:*)')
   })
 
   it('allowed-tools never pre-approves plain npx (network fetch the body forbids)', () => {
@@ -82,7 +82,7 @@ describe('recall SKILL.md — body content', () => {
   })
 
   it('resolution chain tries the plugin-vendored CLI first, with the placeholder-skip rule', () => {
-    expect(body).toContain('node "${CLAUDE_PLUGIN_ROOT}/bin/whydone.mjs" recall --json')
+    expect(body).toContain('node "${CLAUDE_PLUGIN_ROOT}/cli/whydone.mjs" recall --json')
     expect(body).toContain('unsubstituted `${CLAUDE_PLUGIN_ROOT}` placeholder')
   })
 

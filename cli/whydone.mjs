@@ -9389,7 +9389,7 @@ var init_init = __esmMin((() => {
 	init_git_exclude();
 	init_build_index();
 	__dirname$2 = path.dirname(fileURLToPath(import.meta.url));
-	PKG_ROOT$1 = path.basename(__dirname$2) === "dist" || path.basename(__dirname$2) === "bin" ? path.resolve(__dirname$2, "..") : path.resolve(__dirname$2, "..", "..");
+	PKG_ROOT$1 = path.basename(__dirname$2) === "dist" || path.basename(__dirname$2) === "cli" ? path.resolve(__dirname$2, "..") : path.resolve(__dirname$2, "..", "..");
 	TEMPLATES_DIR$1 = path.join(PKG_ROOT$1, "templates", "skills");
 	PKG_VERSION$1 = createRequire(import.meta.url)(path.join(PKG_ROOT$1, "package.json")).version;
 	MODE_LINE = {
@@ -10500,7 +10500,7 @@ var init_update = __esmMin((() => {
 	init_lock_file();
 	init_settings_hooks();
 	__dirname$1 = path.dirname(fileURLToPath(import.meta.url));
-	PKG_ROOT = path.basename(__dirname$1) === "dist" || path.basename(__dirname$1) === "bin" ? path.resolve(__dirname$1, "..") : path.resolve(__dirname$1, "..", "..");
+	PKG_ROOT = path.basename(__dirname$1) === "dist" || path.basename(__dirname$1) === "cli" ? path.resolve(__dirname$1, "..") : path.resolve(__dirname$1, "..", "..");
 	TEMPLATES_DIR = path.join(PKG_ROOT, "templates", "skills");
 	PKG_VERSION = createRequire(import.meta.url)(path.join(PKG_ROOT, "package.json")).version;
 	update_default = defineCommand({
