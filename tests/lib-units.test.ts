@@ -327,3 +327,94 @@ describe('copySkills', () => {
     expect(copySkills.length).toBeLessThanOrEqual(3) // (templatesDir, targetDir, opts)
   })
 })
+
+// ─── marker-block: stray / reordered markers must never eat user content ─────
+
+describe('marker-block — stray and reordered markers (v1.3 audit regressions)', () => {
+  const countOf = (text: string, needle: string): number => text.split(needle).length - 1
+
+  it('a stray lone start marker above user content: patch appends ONE clean block and drops the stray', async () => {
+    const filePath = path.join(tmpDir, 'CLAUDE.md')
+    await writeFile(
+      filePath,
+      '# My project\n\n<!-- whydone:start -->\n\nIMPORTANT user rules that must survive.\n\n## Build\n- npm test\n',
+    )
+
+    await patchClaudeMd(filePath, '.whydone/INDEX.md')
+
+    const patched = await readFile(filePath, 'utf-8')
+    expect(countOf(patched, MARKER_START)).toBe(1)
+    expect(countOf(patched, MARKER_END)).toBe(1)
+    expect(patched).toContain('IMPORTANT user rules that must survive.')
+    expect(patched).toContain('- npm test')
+    // The user text sits ABOVE the (single) block, not inside it.
+    expect(patched.indexOf('IMPORTANT user rules')).toBeLessThan(patched.indexOf(MARKER_START))
+  })
+
+  it('a stray lone start marker above user content: remove keeps the user content (uninstall used to wipe everything down to the real end marker)', async () => {
+    const filePath = path.join(tmpDir, 'CLAUDE.md')
+    // The pre-fix on-disk state: stray marker, user text, then a real block appended later.
+    const realBlock = `${MARKER_START}\n## whydone — work journal\n\nblock body\n${MARKER_END}\n`
+    await writeFile(
+      filePath,
+      '# My project\n\n<!-- whydone:start -->\n\nIMPORTANT user rules that must survive.\n\n## Build\n- npm test\n\n' +
+        realBlock,
+    )
+
+    await removeMarkerBlock(filePath)
+
+    const result = await readFile(filePath, 'utf-8')
+    expect(result).toContain('IMPORTANT user rules that must survive.')
+    expect(result).toContain('- npm test')
+    expect(result).not.toContain('block body')
+    expect(result).not.toContain(MARKER_START)
+    expect(result).not.toContain(MARKER_END)
+  })
+
+  it('an end marker ABOVE the start marker: patch never duplicates the text between them', async () => {
+    const filePath = path.join(tmpDir, 'CLAUDE.md')
+    await writeFile(filePath, '# Top\n<!-- whydone:end -->\nuser text between\n<!-- whydone:start -->\n## Tail\n')
+
+    await patchClaudeMd(filePath, '.whydone/INDEX.md')
+
+    const result = await readFile(filePath, 'utf-8')
+    expect(countOf(result, 'user text between')).toBe(1)
+    expect(countOf(result, '## Tail')).toBe(1)
+    expect(countOf(result, MARKER_START)).toBe(1)
+    expect(countOf(result, MARKER_END)).toBe(1)
+    expect(result.indexOf('## Tail')).toBeLessThan(result.indexOf(MARKER_START))
+  })
+
+  it('a marker mentioned inside prose is not a marker — only a whole line counts', async () => {
+    const filePath = path.join(tmpDir, 'CLAUDE.md')
+    const prose = 'Docs: whydone manages the text between `<!-- whydone:start -->` and `<!-- whydone:end -->`.\n'
+    await writeFile(filePath, '# Project\n\n' + prose)
+
+    await patchClaudeMd(filePath, '.whydone/INDEX.md')
+    const patched = await readFile(filePath, 'utf-8')
+    expect(patched).toContain(prose)
+    expect(patched).toContain('## whydone — work journal')
+
+    await removeMarkerBlock(filePath)
+    const removed = await readFile(filePath, 'utf-8')
+    expect(removed).toContain(prose)
+    expect(removed).not.toContain('## whydone — work journal')
+  })
+
+  it('CRLF files get a CRLF block, keep their lines byte-for-byte, and round-trip through remove', async () => {
+    const filePath = path.join(tmpDir, 'CLAUDE.md')
+    const original = '# Project\r\n\r\nWindows content.\r\n'
+    await writeFile(filePath, original)
+
+    await patchClaudeMd(filePath, '.whydone/INDEX.md')
+    const patched = await readFile(filePath, 'utf-8')
+    expect(patched.startsWith('# Project\r\n\r\nWindows content.\r\n\r\n' + MARKER_START + '\r\n')).toBe(true)
+    expect(patched).not.toMatch(/[^\r]\n/) // no bare LF anywhere
+
+    await patchClaudeMd(filePath, '.whydone/INDEX.md') // idempotent under CRLF too
+    expect(countOf(await readFile(filePath, 'utf-8'), MARKER_START)).toBe(1)
+
+    await removeMarkerBlock(filePath)
+    expect(await readFile(filePath, 'utf-8')).toBe(original)
+  })
+})
