@@ -109,15 +109,19 @@ export interface RankResult {
 
 /**
  * Tokenize a free-text query: lowercase, split on non-(letter/digit/hyphen)
- * (Unicode-aware — Cyrillic survives), drop tokens shorter than 2 chars,
- * drop stopwords, dedupe, cap at 20 tokens.
+ * (Unicode-aware — Cyrillic survives), strip edge hyphens, drop tokens
+ * shorter than 2 chars, drop stopwords, dedupe, cap at 20 tokens.
  */
 export function tokenizeQuery(q: string): string[] {
   const rawTokens = q.toLowerCase().split(/[^\p{L}\p{N}-]+/u)
   const seen = new Set<string>()
   const tokens: string[] = []
 
-  for (const token of rawTokens) {
+  for (const rawToken of rawTokens) {
+    // Hyphens survive the split so `rate-limit` stays one token; strip them at
+    // the edges so `--flag`, a markdown `--` rule or a trailing dash never
+    // becomes a term (a bare `--` used to match every body containing one).
+    const token = rawToken.replace(/^-+|-+$/g, '')
     if (token.length < MIN_TOKEN_LENGTH) continue
     if (STOPWORD_SET.has(token)) continue
     if (seen.has(token)) continue

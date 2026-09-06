@@ -15792,14 +15792,15 @@ var init_validate = __esmMin((() => {
 //#region src/lib/rank-entries.ts
 /**
 * Tokenize a free-text query: lowercase, split on non-(letter/digit/hyphen)
-* (Unicode-aware — Cyrillic survives), drop tokens shorter than 2 chars,
-* drop stopwords, dedupe, cap at 20 tokens.
+* (Unicode-aware — Cyrillic survives), strip edge hyphens, drop tokens
+* shorter than 2 chars, drop stopwords, dedupe, cap at 20 tokens.
 */
 function tokenizeQuery(q) {
 	const rawTokens = q.toLowerCase().split(/[^\p{L}\p{N}-]+/u);
 	const seen = /* @__PURE__ */ new Set();
 	const tokens = [];
-	for (const token of rawTokens) {
+	for (const rawToken of rawTokens) {
+		const token = rawToken.replace(/^-+|-+$/g, "");
 		if (token.length < MIN_TOKEN_LENGTH) continue;
 		if (STOPWORD_SET.has(token)) continue;
 		if (seen.has(token)) continue;

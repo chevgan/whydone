@@ -66,6 +66,12 @@ describe('tokenizeQuery', () => {
     expect(tokenizeQuery('rate-limit logic')).toEqual(['rate-limit', 'logic'])
   })
 
+  it('strips edge hyphens: `--` and `--flag` never become terms', () => {
+    expect(tokenizeQuery('foo -- bar')).toEqual(['foo', 'bar'])
+    expect(tokenizeQuery('--dry-run -v')).toEqual(['dry-run'])
+    expect(tokenizeQuery('trailing- -leading')).toEqual(['trailing', 'leading'])
+  })
+
   it('Cyrillic tokens survive', () => {
     expect(tokenizeQuery('авторизация токен')).toEqual(['авторизация', 'токен'])
   })
