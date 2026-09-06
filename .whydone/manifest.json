@@ -1,1 +1,48 @@
-[]
+[
+  {
+    "id": "20260906-audit-whydone-and-fix-the-four-top-findings",
+    "date": "2026-09-06",
+    "slug": "audit-whydone-and-fix-the-four-top-findings",
+    "task": "Audit whydone, fix its findings, and add a journal language setting",
+    "status": "done",
+    "tags": [
+      "audit",
+      "security",
+      "journal-language",
+      "release"
+    ],
+    "files": [
+      "src/lib/parse-entry.ts",
+      "src/commands/recall.ts",
+      "src/lib/marker-block.ts",
+      "src/commands/validate.ts",
+      "src/lib/config.ts",
+      "src/commands/init.ts",
+      "src/lib/lock-file.ts",
+      "src/lib/rank-entries.ts",
+      "templates/skills/log/SKILL.md",
+      "bin/whydone.mjs",
+      "README.md",
+      "SCHEMA.md",
+      "SECURITY.md",
+      "package.json",
+      ".claude-plugin/plugin.json",
+      "package-lock.json",
+      ".github/workflows/ci.yml",
+      "tests/update.test.ts",
+      "tests/parse-entry.test.ts",
+      "tests/validate.test.ts"
+    ],
+    "links": [],
+    "supersedes": [],
+    "_sections": [
+      "## What changed",
+      "## Why / decisions",
+      "## Alternatives rejected",
+      "## Gotchas / risks",
+      "## Verify-later / follow-ups"
+    ],
+    "_parseError": false,
+    "_supersededBy": []
+  }
+]
