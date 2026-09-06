@@ -10,7 +10,7 @@ export type EntryStatus = 'done' | 'wip' | 'blocked'
 
 /**
  * Shape returned by parseEntry(). Represents a single .whydone entry
- * after lenient reading (gray-matter parse + field normalization).
+ * after lenient reading (frontmatter split + field normalization).
  *
  * _file and _stem are always present. All frontmatter fields are optional
  * because parseEntry() degrades gracefully on malformed entries (_parseError: true).
@@ -20,7 +20,7 @@ export interface ParsedEntry {
   _file: string
   /** Filename without .md extension (e.g. "20260601-design-entry-schema") */
   _stem: string
-  /** True when gray-matter threw YAMLException — all other fields absent */
+  /** True when the frontmatter could not be parsed (YAML error, refused language suffix, unclosed block) — all other fields absent */
   _parseError?: boolean
   /** Schema version — must equal 1 for v1 entries */
   schema?: number

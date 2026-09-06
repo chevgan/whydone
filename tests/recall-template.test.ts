@@ -2,7 +2,7 @@
  * Template lint tests for templates/skills/recall/SKILL.md
  *
  * Pins the load-bearing parts of the /recall skill per 04-DESIGN.md §2/§7:
- * frontmatter parses via gray-matter, disable-model-invocation is false,
+ * frontmatter parses via splitFrontmatter, disable-model-invocation is false,
  * allowed-tools is the comma-separated Tool(prefix:*) form (the space-
  * separated form silently disables pre-approval), and the body contains
  * the offline-safe invocation, the verbatim follow-ups heading, the
@@ -13,17 +13,17 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import matter from 'gray-matter'
+import { splitFrontmatter } from '../src/lib/frontmatter.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const TEMPLATE_PATH = path.join(__dirname, '..', 'templates', 'skills', 'recall', 'SKILL.md')
 
 const raw = readFileSync(TEMPLATE_PATH, 'utf-8')
-const parsed = matter(raw)
+const parsed = splitFrontmatter(raw)
 
 describe('recall SKILL.md — frontmatter', () => {
-  it('parses via gray-matter without error', () => {
-    expect(() => matter(raw)).not.toThrow()
+  it('parses via splitFrontmatter without error', () => {
+    expect(() => splitFrontmatter(raw)).not.toThrow()
     expect(parsed.data).toBeTypeOf('object')
   })
 

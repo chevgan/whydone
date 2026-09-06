@@ -30,7 +30,7 @@ Every entry begins with a YAML frontmatter block delimited by `---`. The fields 
 |-------|------|----------|---------|------|
 | `schema` | integer | yes | — | Must equal `1` for v1. Bare integer, no quotes, no leading zeros. `schema: "1"` (string form) is wrong. Enables future schema evolution. |
 | `id` | string | yes | — | Must equal the filename stem — `<YYYYMMDD-slug>` without `.md`. The filename is canonical identity. If the file is renamed or collision-suffixed, `id` MUST be updated to match. |
-| `date` | string (YYYY-MM-DD) | yes | — | Date only, no time or timezone. MUST be quoted in YAML: `date: "2026-06-01"`. Unquoted, gray-matter/js-yaml parses it as a JavaScript `Date` object, not a string (see §Parser Notes). |
+| `date` | string (YYYY-MM-DD) | yes | — | Date only, no time or timezone. MUST be quoted in YAML: `date: "2026-06-01"`. Unquoted, js-yaml parses it as a JavaScript `Date` object, not a string (see §Parser Notes). |
 | `slug` | string | yes | — | ASCII `[a-z0-9-]` kebab-case only. Max ~50 chars, truncated on a word boundary. Must equal the portion of `id` after the `YYYYMMDD-` prefix. Cyrillic and other non-ASCII characters are transliterated to Latin ASCII (the transliteration table is a writer implementation detail; this contract only mandates ASCII output). |
 | `task` | string | yes | — | One-line imperative description of what was done. |
 | `status` | string | no | `done` | Closed enum: `done \| wip \| blocked`. No other values permitted. |
@@ -93,12 +93,12 @@ Every entry carries `schema: 1` (bare integer). This field enables future schema
 - Unknown or extra frontmatter keys are **preserved** (forward-compatible with future schema versions).
 - A partial or incomplete entry is read as far as possible — the read path uses whatever fields it can parse.
 
-**Implementation requirement:** gray-matter 4.0.3 throws `YAMLException` on malformed YAML frontmatter. The read path MUST wrap every `matter()` call in `try/catch` and return a degraded result (e.g. `{ _id: filename, _parseError: true }`) on error — never halt. A single malformed entry must not crash index rebuild or recall.
+**Implementation requirement:** js-yaml throws `YAMLException` on malformed YAML frontmatter, and whydone's own splitter (`splitFrontmatter()` in `src/lib/frontmatter.ts`) throws on an unclosed block or a non-YAML language suffix. The read path MUST wrap every `splitFrontmatter()` call in `try/catch` and return a degraded result (e.g. `{ _id: filename, _parseError: true }`) on error — never halt. A single malformed entry must not crash index rebuild or recall.
 
 ```
 // Pseudocode — lenient read
 try {
-  const { data, content } = matter(rawFileContent);
+  const { data, content } = splitFrontmatter(rawFileContent);
   return { ...data, _body: content };
 } catch (e) {
   // YAMLException — degrade gracefully, report filename
@@ -136,7 +136,7 @@ supersedes: [20260515-old-recall-design, 20260510-recall-spike]
 
 ## Parser Notes (for implementers)
 
-Verified behavior of gray-matter 4.0.3 + js-yaml 3.14.2 (live-tested 2026-06-01):
+Verified behavior of js-yaml 4 (`load()`, default schema) behind whydone's own splitter (`src/lib/frontmatter.ts`) — identical to the gray-matter 4.0.3 + js-yaml 3.14.2 stack the format was designed on (live-tested 2026-06-01, re-verified against js-yaml 4.3.2 on 2026-09-06):
 
 | Field | Input YAML | Parsed JS type | Note |
 |-------|-----------|----------------|------|
@@ -154,15 +154,16 @@ Verified behavior of gray-matter 4.0.3 + js-yaml 3.14.2 (live-tested 2026-06-01)
 | `supersedes` (scalar) | `supersedes: id-a` | `string` | Correct (single ref). |
 | `supersedes` (array) | `supersedes: [id-a, id-b]` | `string[]` | Correct (multi ref). |
 | unknown field | `future_field: x` | `string` (in `data`) | Forward-compatible. **Preserve, do not strip.** |
-| no frontmatter | *(no `---` block)* | `data: {}` (no throw) | Lenient. `isEmpty` is `false`. |
-| empty frontmatter | `---\n---` | `data: {}` (no throw) | `isEmpty` is `true`. |
-| malformed YAML | `tags: {unclosed` | `YAMLException` THROW | **Wrap every `matter()` call in `try/catch`.** |
+| no frontmatter | *(no `---` block)* | `data: {}` (no throw) | Lenient: the whole file is body. |
+| empty frontmatter | `---\n---` | `data: {}` (no throw) | Comments-only blocks read the same way. |
+| unclosed frontmatter | `---` with no closing `---` line | THROW | Malformed entry — `_parseError` on the read path. |
+| malformed YAML | `tags: {unclosed` | `YAMLException` THROW | **Wrap every `splitFrontmatter()` call in `try/catch`.** |
 | null value | `tags: null` | `null` | Omit optional fields instead of setting to null. |
 | tilde | `tags: ~` | `null` | Omit optional fields instead. |
 | `yes`/`no`/`on`/`off` | `field: yes` | `string "yes"` | NOT boolean in js-yaml 3.x (unlike YAML 1.1 reputation). |
 | leading-zero integer | `schema: 01` | `number(1)` | Parsed correctly but do not use leading zeros (future: `08` would fail). |
 
-**Frontmatter is YAML only — never executed.** gray-matter honors a language written after the opening delimiter (`---js`, `---json`) and parses JavaScript frontmatter with a direct `eval`. Every reader MUST disable the non-YAML engines (`safeMatter()` in `src/lib/parse-entry.ts` is the single sanctioned call site); a file whose frontmatter opens with `---js` or `---json` is a parse error (`_parseError: true`), never code that runs.
+**Frontmatter is YAML only — never executed.** whydone no longer uses gray-matter (dropped in v1.4): its language suffix feature (`---js`, `---json`) parsed JavaScript frontmatter with a direct `eval`. The splitter accepts a bare `---` opener (or `---yaml` / `---yml`) only; any other suffix, like an opener without a closing `---` line, is a parse error (`_parseError: true`), never code that runs.
 
 ---
 

@@ -20,7 +20,7 @@ import path from 'node:path'
 
 import { JOURNAL_DIR } from '../lib/constants.js'
 import { globEntries } from '../lib/glob-entries.js'
-import { safeMatter } from '../lib/parse-entry.js'
+import { splitFrontmatter } from '../lib/frontmatter.js'
 import { buildManifestEntries } from './build-index.js'
 import {
   countOpenFollowUps,
@@ -164,9 +164,9 @@ export async function executeRecall(
         if (file) {
           const raw = await readFile(file, 'utf-8')
           try {
-            // safeMatter: the same engine lockdown as parseEntry — a body read
-            // must never reopen the eval() path parseEntry just refused.
-            body = safeMatter(raw).content
+            // The same splitter as parseEntry: a body read must never take a
+            // different (looser) path than the parse that admitted the entry.
+            body = splitFrontmatter(raw).content
           } catch {
             body = raw
           }
