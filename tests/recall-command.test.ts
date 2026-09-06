@@ -291,6 +291,31 @@ describe('recall command', () => {
     expect(report.results).toEqual([])
   })
 
+  it('a ---js frontmatter entry is a parse error and its code never runs (gray-matter eval lockdown)', async () => {
+    const PROBE = '__whydoneRecallEvalProbe'
+    await writeEntry(changelogDir, {
+      stem: '20260701-good',
+      date: '2026-07-01',
+      slug: 'good',
+      task: 'Good entry',
+    })
+    // A frontmatter "language" of js makes gray-matter eval() the block. The
+    // payload sets a global AND returns a perfectly valid-looking entry, so a
+    // successful parse would even rank it as a normal result.
+    await writeFile(
+      path.join(changelogDir, '20260702-evil.md'),
+      `---js\n(globalThis.${PROBE} = true, { schema: 1, id: "20260702-evil", date: "2026-07-02", slug: "evil", task: "looks normal" })\n---\n## What changed\n- nothing\n`,
+      'utf-8',
+    )
+
+    const { stdout } = await runRecall(projectDir, { json: true })
+    const report = JSON.parse(stdout)
+    expect((globalThis as Record<string, unknown>)[PROBE]).toBeUndefined()
+    expect(report.parseErrors).toEqual(['20260702-evil'])
+    expect(report.total).toBe(2)
+    expect(report.results.map((r: { id: string }) => r.id)).toEqual(['20260701-good'])
+  })
+
   // ─── lenient read: non-string frontmatter scalars never crash ──────────────
 
   it('YAML-valid entry with numeric task/slug is coerced, not a crash', async () => {

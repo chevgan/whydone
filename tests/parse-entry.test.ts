@@ -1,8 +1,8 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parseEntry, CANONICAL_HEADINGS } from '../src/lib/parse-entry.js'
+import { parseEntry, safeMatter, CANONICAL_HEADINGS } from '../src/lib/parse-entry.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURE_PATH = path.join(__dirname, 'fixtures', '20260601-design-entry-schema.md')
@@ -236,5 +236,80 @@ describe('parseEntry — _stem extraction', () => {
     const raw = '---\nschema: 1\n---\n'
     const entry = parseEntry('/some/dir/20260601-my-task.md', raw)
     expect(entry._stem).toBe('20260601-my-task')
+  })
+})
+
+describe('parseEntry — frontmatter is YAML only (gray-matter engine lockdown)', () => {
+  // gray-matter picks a parser from the language after the opening delimiter
+  // and its javascript engine is a direct eval(): before the lockdown a
+  // `---js` entry executed inside validate/index/recall (v1.3 audit).
+  const PROBE = '__whydoneFrontmatterEvalProbe'
+  const jsEntry = (lang: string) =>
+    `---${lang}\n(globalThis.${PROBE} = true, { schema: 1, id: "20260101-x", date: "2026-01-01", slug: "x", task: "looks normal" })\n---\nbody`
+
+  afterEach(() => {
+    delete (globalThis as Record<string, unknown>)[PROBE]
+  })
+
+  it('a ---js frontmatter is a parse error and its code never runs', () => {
+    const entry = parseEntry('/fake/20260101-x.md', jsEntry('js'))
+    expect(entry._parseError).toBe(true)
+    expect(entry.schema).toBeUndefined()
+    expect(entry.task).toBeUndefined()
+    expect((globalThis as Record<string, unknown>)[PROBE]).toBeUndefined()
+  })
+
+  it('---javascript and ---JS spellings are refused the same way', () => {
+    for (const lang of ['javascript', 'JS', 'JavaScript']) {
+      const entry = parseEntry('/fake/20260101-x.md', jsEntry(lang))
+      expect(entry._parseError, lang).toBe(true)
+      expect((globalThis as Record<string, unknown>)[PROBE], lang).toBeUndefined()
+    }
+  })
+
+  it('---json is refused too — the contract says YAML, and a JSON block would be a lie about the format', () => {
+    const raw = '---json\n{"schema": 1, "id": "20260101-x", "date": "2026-01-01", "slug": "x", "task": "t"}\n---\nbody'
+    const entry = parseEntry('/fake/20260101-x.md', raw)
+    expect(entry._parseError).toBe(true)
+  })
+
+  it('an explicit ---yaml language still parses (alias of the default engine)', () => {
+    const entry = parseEntry('/fake/20260101-x.md', '---yaml\nschema: 1\ntask: t\n---\nbody')
+    expect(entry._parseError).toBeUndefined()
+    expect(entry.schema).toBe(1)
+    expect(entry.task).toBe('t')
+  })
+
+  it('safeMatter (the body reader used by recall) throws on ---js instead of evaluating it', () => {
+    expect(() => safeMatter(jsEntry('js'))).toThrow(/YAML only/)
+    expect((globalThis as Record<string, unknown>)[PROBE]).toBeUndefined()
+  })
+
+  it('safeMatter treats non-object frontmatter (a bare scalar) as empty data, not a crash', () => {
+    const { data, content } = safeMatter('---\njust a string\n---\nbody')
+    expect(data).toEqual({})
+    expect(content).toBe('body')
+  })
+})
+
+describe('parseEntry — reserved computed keys in frontmatter are ignored', () => {
+  it('_parseError: true in frontmatter does not turn a valid entry into a parse error', () => {
+    const raw = '---\nschema: 1\nid: 20260102-x\ndate: "2026-01-02"\nslug: x\ntask: t\n_parseError: true\n---\n## What changed\n- y\n'
+    const entry = parseEntry('/fake/20260102-x.md', raw)
+    expect(entry._parseError).toBeUndefined()
+    expect(entry.task).toBe('t')
+    expect(entry._sections).toEqual(['## What changed'])
+  })
+
+  it('_sections / _scalarFields / _file / _stem in frontmatter are recomputed, never trusted', () => {
+    const raw =
+      '---\nschema: 1\nid: 20260102-x\ndate: "2026-01-02"\nslug: x\ntask: t\ntags: [a]\n_sections: [bogus]\n_scalarFields: [tags]\n_file: /elsewhere.md\n_stem: other\nfuture_field: keep-me\n---\nbody'
+    const entry = parseEntry('/fake/20260102-x.md', raw)
+    expect(entry._sections).toEqual([])
+    expect(entry._scalarFields).toEqual([])
+    expect(entry._file).toBe('/fake/20260102-x.md')
+    expect(entry._stem).toBe('20260102-x')
+    // Unknown keys outside the computed namespace are still preserved.
+    expect(entry.future_field).toBe('keep-me')
   })
 })

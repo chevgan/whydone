@@ -162,6 +162,8 @@ Verified behavior of gray-matter 4.0.3 + js-yaml 3.14.2 (live-tested 2026-06-01)
 | `yes`/`no`/`on`/`off` | `field: yes` | `string "yes"` | NOT boolean in js-yaml 3.x (unlike YAML 1.1 reputation). |
 | leading-zero integer | `schema: 01` | `number(1)` | Parsed correctly but do not use leading zeros (future: `08` would fail). |
 
+**Frontmatter is YAML only — never executed.** gray-matter honors a language written after the opening delimiter (`---js`, `---json`) and parses JavaScript frontmatter with a direct `eval`. Every reader MUST disable the non-YAML engines (`safeMatter()` in `src/lib/parse-entry.ts` is the single sanctioned call site); a file whose frontmatter opens with `---js` or `---json` is a parse error (`_parseError: true`), never code that runs.
+
 ---
 
 ## Security Note

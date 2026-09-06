@@ -14,6 +14,72 @@ export const CANONICAL_HEADINGS: string[] = [
   '## Verify-later / follow-ups',
 ]
 
+// ─── gray-matter engine lockdown ─────────────────────────────────────────────
+
+/**
+ * gray-matter picks its parser from the language written right after the
+ * opening delimiter (`---js`, `---json`), and its JavaScript engine is a
+ * direct eval(). Left enabled, a journal entry whose frontmatter starts with
+ * `---js` runs arbitrary code inside `validate`, `index`, `recall` and the
+ * /recall skill — in CI, and on every machine that clones the repo
+ * (reproduced in the v1.3 audit: validate reported "0 errors" while the
+ * entry's code executed). Entries are YAML by contract (SCHEMA.md
+ * §Frontmatter Fields, §Parser Notes), so every non-YAML engine is replaced
+ * by one that throws; the lenient read path then degrades such a file to
+ * _parseError exactly like malformed YAML. `js`/`javascript` and `json` are
+ * the only engines gray-matter 4 registers besides yaml — any other language
+ * suffix is already an "engine not registered" throw.
+ */
+function refuseLanguage(language: string): never {
+  throw new Error(`frontmatter language "${language}" is not allowed — entries are YAML only`)
+}
+
+function blockedEngine(language: string) {
+  return {
+    parse: (): never => refuseLanguage(language),
+    stringify: (): never => refuseLanguage(language),
+  }
+}
+
+const YAML_ONLY_ENGINES = {
+  js: blockedEngine('js'),
+  javascript: blockedEngine('javascript'),
+  json: blockedEngine('json'),
+}
+
+/**
+ * The ONLY way src/ may call gray-matter: non-YAML engines disabled.
+ * Passing options also bypasses gray-matter's process-wide parse cache
+ * (keyed by file content), which is a memory leak in long-lived callers.
+ * Frontmatter that parses to a non-object (a bare scalar, a list) is
+ * treated as empty data — the read path is lenient, never a crash.
+ */
+export function safeMatter(raw: string): { data: Record<string, unknown>; content: string } {
+  const file = matter(raw, { engines: YAML_ONLY_ENGINES })
+  const parsed: unknown = file.data
+  const data =
+    typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {}
+  return { data, content: file.content }
+}
+
+/**
+ * Computed-field namespace of ParsedEntry. Unknown frontmatter keys are
+ * preserved by contract (forward-compatible spread), but a key with one of
+ * these names — `_parseError: true` in an otherwise valid file — would
+ * masquerade as a tooling verdict, so they are dropped before the spread.
+ */
+const RESERVED_KEYS: ReadonlySet<string> = new Set([
+  '_file',
+  '_stem',
+  '_parseError',
+  '_sections',
+  '_scalarFields',
+])
+
+// ─── Field normalization ─────────────────────────────────────────────────────
+
 /**
  * Internal result type for scalar-to-array coercion.
  */
@@ -94,11 +160,14 @@ function detectSections(content: string): string[] {
   return CANONICAL_HEADINGS.filter((h) => present.has(h))
 }
 
+// ─── Entry parsing ───────────────────────────────────────────────────────────
+
 /**
  * Parse a single changelog entry file leniently.
  *
  * Always returns a ParsedEntry — never throws.
- * On YAMLException: returns { _file, _stem, _parseError: true }.
+ * On YAMLException (or a refused non-YAML frontmatter language):
+ * returns { _file, _stem, _parseError: true }.
  *
  * Handles all three SCHEMA.md §Parser Notes pitfalls:
  *   Pitfall 1 — date coercion (Date → YYYY-MM-DD string)
@@ -109,7 +178,13 @@ export function parseEntry(filePath: string, rawContent: string): ParsedEntry {
   const stem = path.basename(filePath, '.md')
 
   try {
-    const { data, content } = matter(rawContent)
+    const { data, content } = safeMatter(rawContent)
+
+    // Forward-compatible spread of unknown keys — minus the computed namespace.
+    const extra: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(data)) {
+      if (!RESERVED_KEYS.has(key)) extra[key] = value
+    }
 
     // Apply scalar-to-array coercion to all array fields and track which ones needed it
     const tagsResult = toArrayResult(data.tags)
@@ -126,9 +201,9 @@ export function parseEntry(filePath: string, rawContent: string): ParsedEntry {
     // Detect which canonical headings are present in the body (fence-aware)
     const sections = detectSections(content)
 
-    // Spread all frontmatter data, then override normalized fields
+    // Spread the preserved frontmatter, then override normalized fields
     const entry: ParsedEntry = {
-      ...data,
+      ...extra,
       _file: filePath,
       _stem: stem,
       id: normOptionalString(data.id),
@@ -144,7 +219,7 @@ export function parseEntry(filePath: string, rawContent: string): ParsedEntry {
 
     return entry
   } catch {
-    // Pitfall 3: YAMLException — degrade gracefully
+    // Pitfall 3: YAMLException (or refused frontmatter language) — degrade gracefully
     return {
       _file: filePath,
       _stem: stem,

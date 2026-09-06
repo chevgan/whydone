@@ -12139,6 +12139,44 @@ var require_gray_matter = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 //#endregion
 //#region src/lib/parse-entry.ts
 /**
+* gray-matter picks its parser from the language written right after the
+* opening delimiter (`---js`, `---json`), and its JavaScript engine is a
+* direct eval(). Left enabled, a journal entry whose frontmatter starts with
+* `---js` runs arbitrary code inside `validate`, `index`, `recall` and the
+* /recall skill — in CI, and on every machine that clones the repo
+* (reproduced in the v1.3 audit: validate reported "0 errors" while the
+* entry's code executed). Entries are YAML by contract (SCHEMA.md
+* §Frontmatter Fields, §Parser Notes), so every non-YAML engine is replaced
+* by one that throws; the lenient read path then degrades such a file to
+* _parseError exactly like malformed YAML. `js`/`javascript` and `json` are
+* the only engines gray-matter 4 registers besides yaml — any other language
+* suffix is already an "engine not registered" throw.
+*/
+function refuseLanguage(language) {
+	throw new Error(`frontmatter language "${language}" is not allowed — entries are YAML only`);
+}
+function blockedEngine(language) {
+	return {
+		parse: () => refuseLanguage(language),
+		stringify: () => refuseLanguage(language)
+	};
+}
+/**
+* The ONLY way src/ may call gray-matter: non-YAML engines disabled.
+* Passing options also bypasses gray-matter's process-wide parse cache
+* (keyed by file content), which is a memory leak in long-lived callers.
+* Frontmatter that parses to a non-object (a bare scalar, a list) is
+* treated as empty data — the read path is lenient, never a crash.
+*/
+function safeMatter(raw) {
+	const file = (0, import_gray_matter.default)(raw, { engines: YAML_ONLY_ENGINES });
+	const parsed = file.data;
+	return {
+		data: typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed : {},
+		content: file.content
+	};
+}
+/**
 * Coerce a value to an array. Returns wasScalar=true when the raw value
 * was a non-array (scalar coercion was applied).
 *
@@ -12213,7 +12251,8 @@ function detectSections(content) {
 * Parse a single changelog entry file leniently.
 *
 * Always returns a ParsedEntry — never throws.
-* On YAMLException: returns { _file, _stem, _parseError: true }.
+* On YAMLException (or a refused non-YAML frontmatter language):
+* returns { _file, _stem, _parseError: true }.
 *
 * Handles all three SCHEMA.md §Parser Notes pitfalls:
 *   Pitfall 1 — date coercion (Date → YYYY-MM-DD string)
@@ -12223,7 +12262,9 @@ function detectSections(content) {
 function parseEntry(filePath, rawContent) {
 	const stem = path.basename(filePath, ".md");
 	try {
-		const { data, content } = (0, import_gray_matter$1.default)(rawContent);
+		const { data, content } = safeMatter(rawContent);
+		const extra = {};
+		for (const [key, value] of Object.entries(data)) if (!RESERVED_KEYS.has(key)) extra[key] = value;
 		const tagsResult = toArrayResult(data.tags);
 		const filesResult = toArrayResult(data.files);
 		const linksResult = toArrayResult(data.links);
@@ -12235,7 +12276,7 @@ function parseEntry(filePath, rawContent) {
 		if (supersResult.wasScalar) scalarFields.push("supersedes");
 		const sections = detectSections(content);
 		return {
-			...data,
+			...extra,
 			_file: filePath,
 			_stem: stem,
 			id: normOptionalString(data.id),
@@ -12256,9 +12297,9 @@ function parseEntry(filePath, rawContent) {
 		};
 	}
 }
-var import_gray_matter$1, CANONICAL_HEADINGS;
+var import_gray_matter, CANONICAL_HEADINGS, YAML_ONLY_ENGINES, RESERVED_KEYS;
 var init_parse_entry = __esmMin((() => {
-	import_gray_matter$1 = /* @__PURE__ */ __toESM(require_gray_matter(), 1);
+	import_gray_matter = /* @__PURE__ */ __toESM(require_gray_matter(), 1);
 	CANONICAL_HEADINGS = [
 		"## What changed",
 		"## Why / decisions",
@@ -12266,6 +12307,18 @@ var init_parse_entry = __esmMin((() => {
 		"## Gotchas / risks",
 		"## Verify-later / follow-ups"
 	];
+	YAML_ONLY_ENGINES = {
+		js: blockedEngine("js"),
+		javascript: blockedEngine("javascript"),
+		json: blockedEngine("json")
+	};
+	RESERVED_KEYS = new Set([
+		"_file",
+		"_stem",
+		"_parseError",
+		"_sections",
+		"_scalarFields"
+	]);
 }));
 //#endregion
 //#region src/lib/glob-entries.ts
@@ -15953,7 +16006,7 @@ async function executeRecall(changelogDir, opts) {
 		if (file) {
 			const raw = await readFile(file, "utf-8");
 			try {
-				body = (0, import_gray_matter.default)(raw).content;
+				body = safeMatter(raw).content;
 			} catch {
 				body = raw;
 			}
@@ -16001,12 +16054,12 @@ function toResultItem(s, idToFile) {
 		openFollowUps: e.openFollowUps
 	};
 }
-var import_gray_matter, recall_default;
+var recall_default;
 var init_recall = __esmMin((() => {
 	init_dist$6();
-	import_gray_matter = /* @__PURE__ */ __toESM(require_gray_matter(), 1);
 	init_constants();
 	init_glob_entries();
+	init_parse_entry();
 	init_build_index();
 	init_rank_entries();
 	recall_default = defineCommand({
