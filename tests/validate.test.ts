@@ -8,10 +8,11 @@
  * Coverage:
  *   BLOCK checks: PARSE_ERROR, MISSING_FIELD (schema/id/date/slug/task),
  *                 WRONG_SCHEMA, BAD_DATE, BAD_SLUG, ID_STEM_MISMATCH,
- *                 SLUG_MISMATCH, BAD_STATUS, BAD_TYPE (via _scalarFields)
+ *                 ID_DATE_MISMATCH, SLUG_MISMATCH, BAD_STATUS,
+ *                 BAD_TYPE (tags/files/links via _scalarFields)
  *   WARNING checks: SUPERSEDES_MISSING (id not in existingIds)
  *   Negative: SUPERSEDES_MISSING not emitted when id IS in existingIds
- *   Negative: BAD_TYPE not emitted when _scalarFields does not include 'tags'
+ *   Negative: BAD_TYPE not emitted when _scalarFields is empty or only 'supersedes'
  */
 
 import { describe, it, expect } from 'vitest'
@@ -305,11 +306,32 @@ describe('strictCheck — BAD_TYPE via _scalarFields', () => {
     expect(err).toBeUndefined()
   })
 
-  it('does NOT emit BAD_TYPE when _scalarFields includes "files" but not "tags"', () => {
+  it('emits BAD_TYPE for files (not tags) when only files was a bare scalar', () => {
     const entry = { ...validBase, _scalarFields: ['files'] }
     const { errors } = strictCheck(entry, VALID_STEM, EMPTY_IDS)
-    const tagErr = errors.find(e => e.code === 'BAD_TYPE' && e.field === 'tags')
-    expect(tagErr).toBeUndefined()
+    const fields = errors.filter(e => e.code === 'BAD_TYPE').map(e => e.field)
+    expect(fields).toEqual(['files'])
+  })
+
+  it('emits BAD_TYPE for links too — SCHEMA.md mandates bracket form for tags, files and links', () => {
+    const entry = { ...validBase, _scalarFields: ['tags', 'files', 'links'] }
+    const { errors } = strictCheck(entry, VALID_STEM, EMPTY_IDS)
+    const fields = errors.filter(e => e.code === 'BAD_TYPE').map(e => e.field)
+    expect(fields).toEqual(['tags', 'files', 'links'])
+  })
+
+  it('does NOT emit BAD_TYPE for a bare-scalar supersedes — a single reference is valid by contract', () => {
+    const entry = { ...validBase, _scalarFields: ['supersedes'] }
+    const { errors } = strictCheck(entry, VALID_STEM, EMPTY_IDS)
+    expect(errors.find(e => e.code === 'BAD_TYPE')).toBeUndefined()
+  })
+
+  it('via parseEntry: files: src/a.ts (bare scalar) is BAD_TYPE [files] and nothing else', () => {
+    const raw =
+      '---\nschema: 1\nid: 20260101-x\ndate: "2026-01-01"\nslug: x\ntask: t\nfiles: src/a.ts\n---\nbody'
+    const entry = parseEntry('/fake/.whydone/20260101-x.md', raw)
+    const { errors } = strictCheck(entry, '20260101-x', EMPTY_IDS)
+    expect(errors.map((e) => `${e.code}:${e.field}`)).toEqual(['BAD_TYPE:files'])
   })
 })
 
@@ -424,5 +446,69 @@ describe('strictCheck — SUPERSEDES_MISSING warning', () => {
     const entry = { ...validBase, supersedes: [] }
     const { warnings } = strictCheck(entry, VALID_STEM, EMPTY_IDS)
     expect(warnings).toHaveLength(0)
+  })
+})
+
+// ─── BLOCK: ID_DATE_MISMATCH ─────────────────────────────────────────────────
+
+describe('strictCheck — ID_DATE_MISMATCH', () => {
+  it('emits ID_DATE_MISMATCH when the id prefix is not the date digits', () => {
+    // id stays 20260601-…, date moves — the filename now lies about the date.
+    const entry = { ...validBase, date: '2026-03-15' }
+    const { errors } = strictCheck(entry, VALID_STEM, EMPTY_IDS)
+    const err = errors.find(e => e.code === 'ID_DATE_MISMATCH')
+    expect(err).toBeDefined()
+    expect(err?.field).toBe('id')
+    expect(err?.message).toContain('"20260315-"')
+  })
+
+  it('emits ID_DATE_MISMATCH when the id has no YYYYMMDD- prefix at all', () => {
+    const entry = { ...validBase, id: 'design-entry-schema', slug: 'entry-schema' }
+    const { errors } = strictCheck(entry, 'design-entry-schema', EMPTY_IDS)
+    expect(errors.some(e => e.code === 'ID_DATE_MISMATCH')).toBe(true)
+  })
+
+  it('does NOT emit ID_DATE_MISMATCH when the id starts with the date digits', () => {
+    const { errors } = strictCheck(validBase, VALID_STEM, EMPTY_IDS)
+    expect(errors.find(e => e.code === 'ID_DATE_MISMATCH')).toBeUndefined()
+  })
+
+  it('stays silent behind BAD_DATE and a missing id — no cascading noise', () => {
+    const badDate = { ...validBase, date: '06/01/2026' }
+    const badDateErrors = strictCheck(badDate, VALID_STEM, EMPTY_IDS).errors
+    expect(badDateErrors.some(e => e.code === 'BAD_DATE')).toBe(true)
+    expect(badDateErrors.some(e => e.code === 'ID_DATE_MISMATCH')).toBe(false)
+
+    const noId = { ...validBase, id: undefined }
+    const noIdErrors = strictCheck(noId, VALID_STEM, EMPTY_IDS).errors
+    expect(noIdErrors.some(e => e.code === 'MISSING_FIELD' && e.field === 'id')).toBe(true)
+    expect(noIdErrors.some(e => e.code === 'ID_DATE_MISMATCH')).toBe(false)
+  })
+
+  it('via parseEntry: a file whose date disagrees with its filename fails with exactly ID_DATE_MISMATCH', () => {
+    // The /recall skill's degraded mode rebuilds the path as <date digits>-<slug>.md,
+    // so this entry would be unreachable there while validate (pre-fix) said "0 errors".
+    const raw =
+      '---\nschema: 1\nid: 20260101-date-mismatch\ndate: "2026-03-15"\nslug: date-mismatch\ntask: t\n---\nbody'
+    const entry = parseEntry('/fake/.whydone/20260101-date-mismatch.md', raw)
+    const { errors } = strictCheck(entry, '20260101-date-mismatch', EMPTY_IDS)
+    expect(errors.map((e) => e.code)).toEqual(['ID_DATE_MISMATCH'])
+  })
+})
+
+// ─── WRONG_SCHEMA message names the offending value ──────────────────────────
+
+describe('strictCheck — WRONG_SCHEMA message', () => {
+  it('schema: "1" (string form) reads got "1", not the self-contradicting "must be 1, got 1"', () => {
+    const entry = { ...validBase, schema: '1' as unknown as number }
+    const { errors } = strictCheck(entry, VALID_STEM, EMPTY_IDS)
+    const err = errors.find(e => e.code === 'WRONG_SCHEMA')
+    expect(err?.message).toBe('schema must be the bare integer 1, got "1"')
+  })
+
+  it('a wrong integer is printed bare', () => {
+    const entry = { ...validBase, schema: 2 }
+    const { errors } = strictCheck(entry, VALID_STEM, EMPTY_IDS)
+    expect(errors.find(e => e.code === 'WRONG_SCHEMA')?.message).toBe('schema must be the bare integer 1, got 2')
   })
 })

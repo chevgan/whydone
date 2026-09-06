@@ -15549,7 +15549,7 @@ function strictCheck(entry, stem, existingIds) {
 	else if (entry.schema !== 1) errors.push({
 		code: "WRONG_SCHEMA",
 		field: "schema",
-		message: `schema must be 1, got ${entry.schema}`
+		message: `schema must be the bare integer 1, got ${JSON.stringify(entry.schema)}`
 	});
 	if (!entry.id) errors.push({
 		code: "MISSING_FIELD",
@@ -15571,6 +15571,14 @@ function strictCheck(entry, stem, existingIds) {
 		field: "date",
 		message: `date "${entry.date}" must be in YYYY-MM-DD format`
 	});
+	if (typeof entry.id === "string" && entry.id && entry.date && DATE_RE.test(entry.date)) {
+		const expectedPrefix = entry.date.replace(/-/g, "") + "-";
+		if (!entry.id.startsWith(expectedPrefix)) errors.push({
+			code: "ID_DATE_MISMATCH",
+			field: "id",
+			message: `id "${entry.id}" must start with "${expectedPrefix}" (the digits of date "${entry.date}")`
+		});
+	}
 	if (!entry.slug) errors.push({
 		code: "MISSING_FIELD",
 		field: "slug",
@@ -15603,10 +15611,14 @@ function strictCheck(entry, stem, existingIds) {
 			message: `status "${entry.status}" is not in enum [done, wip, blocked]`
 		});
 	}
-	if (entry._scalarFields?.includes("tags")) errors.push({
+	for (const field of [
+		"tags",
+		"files",
+		"links"
+	]) if (entry._scalarFields?.includes(field)) errors.push({
 		code: "BAD_TYPE",
-		field: "tags",
-		message: "tags must be a YAML array [...] not a bare scalar — see SCHEMA.md §Frontmatter Fields"
+		field,
+		message: `${field} must be a YAML array [...] not a bare scalar — see SCHEMA.md §Frontmatter Fields`
 	});
 	for (const supId of entry.supersedes ?? []) if (!existingIds.has(supId)) warnings.push({
 		code: "SUPERSEDES_MISSING",

@@ -12,7 +12,8 @@
  *
  * BLOCK checks (non-zero exit on any):
  *   PARSE_ERROR, MISSING_FIELD (schema/id/date/slug/task), WRONG_SCHEMA,
- *   BAD_DATE, BAD_SLUG, ID_STEM_MISMATCH, SLUG_MISMATCH, BAD_STATUS, BAD_TYPE
+ *   BAD_DATE, BAD_SLUG, ID_STEM_MISMATCH, ID_DATE_MISMATCH, SLUG_MISMATCH,
+ *   BAD_STATUS, BAD_TYPE (tags/files/links written as a bare scalar)
  *
  * WARNING checks (zero exit unless future --strict flag):
  *   SUPERSEDES_MISSING
@@ -90,7 +91,7 @@ export function strictCheck(
       errors.push({
         code: 'WRONG_SCHEMA',
         field: 'schema',
-        message: `schema must be 1, got ${entry.schema}`,
+        message: `schema must be the bare integer 1, got ${JSON.stringify(entry.schema)}`,
       })
     }
   }
@@ -127,6 +128,24 @@ export function strictCheck(
         code: 'BAD_DATE',
         field: 'date',
         message: `date "${entry.date}" must be in YYYY-MM-DD format`,
+      })
+    }
+  }
+
+  // BLOCK: ID_DATE_MISMATCH — the id (= filename stem) must start with the
+  // date's digits: `<YYYYMMDD>-<slug>` (SCHEMA.md §Filename and Slug Rules).
+  // The /recall skill's degraded mode (CLI unavailable) reconstructs the file
+  // name from INDEX.md as `<date digits>-<slug>.md`, so a mismatch makes an
+  // otherwise-valid entry unreachable there. Checked only when both fields
+  // are individually well-formed — no cascading noise behind MISSING_FIELD or
+  // BAD_DATE.
+  if (typeof entry.id === 'string' && entry.id && entry.date && DATE_RE.test(entry.date)) {
+    const expectedPrefix = entry.date.replace(/-/g, '') + '-'
+    if (!entry.id.startsWith(expectedPrefix)) {
+      errors.push({
+        code: 'ID_DATE_MISMATCH',
+        field: 'id',
+        message: `id "${entry.id}" must start with "${expectedPrefix}" (the digits of date "${entry.date}")`,
       })
     }
   }
@@ -184,14 +203,18 @@ export function strictCheck(
     }
   }
 
-  // BLOCK: BAD_TYPE — tags written as bare scalar (detected via _scalarFields from parseEntry)
-  // validate reads _scalarFields as-is from the ParsedEntry — it does NOT re-read the raw file
-  if (entry._scalarFields?.includes('tags')) {
-    errors.push({
-      code: 'BAD_TYPE',
-      field: 'tags',
-      message: 'tags must be a YAML array [...] not a bare scalar — see SCHEMA.md §Frontmatter Fields',
-    })
+  // BLOCK: BAD_TYPE — tags/files/links written as a bare scalar (detected via
+  // _scalarFields from parseEntry; validate never re-reads the raw file).
+  // SCHEMA.md mandates bracket form for all three; `supersedes` is the one
+  // array field where a bare scalar is explicitly valid (single reference).
+  for (const field of ['tags', 'files', 'links']) {
+    if (entry._scalarFields?.includes(field)) {
+      errors.push({
+        code: 'BAD_TYPE',
+        field,
+        message: `${field} must be a YAML array [...] not a bare scalar — see SCHEMA.md §Frontmatter Fields`,
+      })
+    }
   }
 
   // WARNING: SUPERSEDES_MISSING — supersedes ids must exist as entries on disk
