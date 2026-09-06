@@ -3,7 +3,7 @@ import { mkdtemp, writeFile, readFile, rm, mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
 import { patchClaudeMd, removeMarkerBlock, MARKER_START, MARKER_END } from '../src/lib/marker-block.js'
-import { readLockFile, writeLockFile } from '../src/lib/lock-file.js'
+import { isLockFileShape, readLockFile, writeLockFile } from '../src/lib/lock-file.js'
 import { copySkills } from '../src/lib/copy-skills.js'
 import type { LockFile } from '../src/types.js'
 
@@ -416,5 +416,52 @@ describe('marker-block — stray and reordered markers (v1.3 audit regressions)'
 
     await removeMarkerBlock(filePath)
     expect(await readFile(filePath, 'utf-8')).toBe(original)
+  })
+})
+
+// ─── lock-file: structural guard (v1.3 audit) ────────────────────────────────
+
+describe('readLockFile — structural guard', () => {
+  const v2 = {
+    lockVersion: 2,
+    version: '1.3.1',
+    scope: 'project',
+    skillsDir: 'skills',
+    skills: ['skills/log/SKILL.md', 'skills/recall/SKILL.md'],
+    claudeMdPatched: true,
+    claudeMdPath: '../CLAUDE.md',
+  }
+
+  it('isLockFileShape accepts exactly what init writes', () => {
+    expect(isLockFileShape(v2)).toBe(true)
+    expect(isLockFileShape({ ...v2, scope: 'global', claudeMdPath: 'CLAUDE.md' })).toBe(true)
+  })
+
+  it('a v2 lock missing skills[] or claudeMdPath reads as null instead of crashing uninstall later', async () => {
+    const lockPath = path.join(tmpDir, 'whydone.lock.json')
+    await writeFile(lockPath, JSON.stringify({ lockVersion: 2 }))
+    expect(await readLockFile(lockPath)).toBeNull()
+    await writeFile(lockPath, JSON.stringify({ ...v2, skills: 'skills/log/SKILL.md' }))
+    expect(await readLockFile(lockPath)).toBeNull() // skills must be an array of strings
+    await writeFile(lockPath, JSON.stringify({ ...v2, claudeMdPath: undefined }))
+    expect(await readLockFile(lockPath)).toBeNull()
+  })
+
+  it('a non-object lock (array, string, null) reads as null', async () => {
+    const lockPath = path.join(tmpDir, 'whydone.lock.json')
+    for (const raw of ['[]', '"lock"', 'null', '42']) {
+      await writeFile(lockPath, raw)
+      expect(await readLockFile(lockPath), raw).toBeNull()
+    }
+  })
+
+  it('a v1 lock (with or without lockVersion) still comes back so the caller can print the "older whydone" message', async () => {
+    const lockPath = path.join(tmpDir, 'whydone.lock.json')
+    await writeFile(lockPath, JSON.stringify({ lockVersion: 1, installedAt: 'x', skills: [] }))
+    expect((await readLockFile(lockPath))?.lockVersion).toBe(1)
+    await writeFile(lockPath, JSON.stringify({ installedAt: 'x', skills: [] }))
+    const noVersion = await readLockFile(lockPath)
+    expect(noVersion).not.toBeNull()
+    expect(noVersion?.lockVersion).toBeUndefined()
   })
 })
