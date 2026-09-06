@@ -1,4 +1,5 @@
 {
   "configVersion": 1,
-  "mode": "ask"
+  "mode": "ask",
+  "language": "en"
 }
