@@ -238,6 +238,27 @@ tags: [auth, middleware]
 files: [src/middleware/auth.ts, src/lib/session.ts]
 ---
 
+## What changed
+- Replaced JWT verification with server-side cookie sessions.
+
+## Why / decisions
+- Revocation: killing a session must be instant; JWT blocklists
+  reintroduce the state JWT was supposed to avoid.
+
+## Alternatives rejected
+- Short-lived JWT + refresh rotation — 2x the moving parts for
+  the same guarantee.
+
+## Gotchas / risks
+- Session cookie is SameSite=Lax; the /webhook endpoint bypasses
+  it on purpose.
+
+## Verify-later / follow-ups
+- [ ] Confirm CSRF token rotation under concurrent tabs.
+```
+
+Five canonical body sections; empty ones are omitted, not padded. The exact heading strings matter — tooling matches them verbatim. Full contract in [SCHEMA.md](SCHEMA.md).
+
 ### CLI reference
 
 The skills do the AI work; the CLI does everything deterministic. All commands accept `--quiet` and `--no-color`; most accept `--dry-run`.
