@@ -15,7 +15,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import matter from 'gray-matter'
+import { splitFrontmatter } from '../src/lib/frontmatter.js'
 import { CANONICAL_HEADINGS } from '../src/lib/parse-entry.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -26,9 +26,9 @@ const EXPECTED_ALLOWED_TOOLS =
 
 describe('log SKILL.md template', () => {
   const raw = readFileSync(SKILL_PATH, 'utf-8')
-  const { data, content } = matter(raw)
+  const { data, content } = splitFrontmatter(raw)
 
-  it('frontmatter parses via gray-matter with the expected core fields', () => {
+  it('frontmatter parses via splitFrontmatter with the expected core fields', () => {
     expect(data.name).toBe('log')
     expect(typeof data.description).toBe('string')
     expect(data.description.length).toBeGreaterThan(0)

@@ -276,8 +276,10 @@ describe('recall command', () => {
   })
 
   it('journal with ONLY malformed entries reports total > 0 (not "empty")', async () => {
-    // Content differs from the previous test: gray-matter caches parses by
-    // input string, and a post-throw cache hit would return an empty parse.
+    // Content differs from the previous test on purpose: gray-matter (dropped
+    // in v1.4) cached parses by input string, and a post-throw cache hit once
+    // returned an empty parse — distinct inputs keep this a regression guard
+    // against any future parse cache.
     await writeFile(
       path.join(changelogDir, '20260615-broken.md'),
       '---\ntags: {unclosed-only-malformed\n---\nbody\n',
@@ -291,7 +293,7 @@ describe('recall command', () => {
     expect(report.results).toEqual([])
   })
 
-  it('a ---js frontmatter entry is a parse error and its code never runs (gray-matter eval lockdown)', async () => {
+  it('a ---js frontmatter entry is a parse error and its code never runs (no frontmatter language, no eval)', async () => {
     const PROBE = '__whydoneRecallEvalProbe'
     await writeEntry(changelogDir, {
       stem: '20260701-good',
@@ -299,9 +301,9 @@ describe('recall command', () => {
       slug: 'good',
       task: 'Good entry',
     })
-    // A frontmatter "language" of js makes gray-matter eval() the block. The
-    // payload sets a global AND returns a perfectly valid-looking entry, so a
-    // successful parse would even rank it as a normal result.
+    // A frontmatter "language" of js made gray-matter (dropped in v1.4) eval()
+    // the block. The payload sets a global AND returns a perfectly valid-looking
+    // entry, so a successful parse would even rank it as a normal result.
     await writeFile(
       path.join(changelogDir, '20260702-evil.md'),
       `---js\n(globalThis.${PROBE} = true, { schema: 1, id: "20260702-evil", date: "2026-07-02", slug: "evil", task: "looks normal" })\n---\n## What changed\n- nothing\n`,

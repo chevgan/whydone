@@ -2,7 +2,8 @@ import { describe, it, expect, afterEach } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parseEntry, safeMatter, CANONICAL_HEADINGS } from '../src/lib/parse-entry.js'
+import { parseEntry, CANONICAL_HEADINGS } from '../src/lib/parse-entry.js'
+import { splitFrontmatter } from '../src/lib/frontmatter.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURE_PATH = path.join(__dirname, 'fixtures', '20260601-design-entry-schema.md')
@@ -73,7 +74,7 @@ describe('parseEntry — happy path (canonical fixture)', () => {
 
 describe('parseEntry — date coercion', () => {
   it('normalizes unquoted date (YAML parses as Date) to YYYY-MM-DD string', () => {
-    // YAML without quotes: "date: 2026-06-01" is parsed as a Date object by gray-matter
+    // YAML without quotes: "date: 2026-06-01" is parsed as a Date object by js-yaml
     const raw = '---\nschema: 1\nid: x\ndate: 2026-06-01\nslug: x\ntask: t\ntags: [a]\n---\nbody'
     const entry = parseEntry('/fake/path/20260601-test.md', raw)
     expect(typeof entry.date).toBe('string')
@@ -239,10 +240,11 @@ describe('parseEntry — _stem extraction', () => {
   })
 })
 
-describe('parseEntry — frontmatter is YAML only (gray-matter engine lockdown)', () => {
-  // gray-matter picks a parser from the language after the opening delimiter
-  // and its javascript engine is a direct eval(): before the lockdown a
-  // `---js` entry executed inside validate/index/recall (v1.3 audit).
+describe('parseEntry — frontmatter is YAML only (no language suffix, no eval)', () => {
+  // gray-matter (dropped in v1.4) picked a parser from the language after the
+  // opening delimiter and its javascript engine was a direct eval(): a `---js`
+  // entry executed inside validate/index/recall (v1.3 audit). The splitter
+  // never evaluates anything — the probe below must stay unset forever.
   const PROBE = '__whydoneFrontmatterEvalProbe'
   const jsEntry = (lang: string) =>
     `---${lang}\n(globalThis.${PROBE} = true, { schema: 1, id: "20260101-x", date: "2026-01-01", slug: "x", task: "looks normal" })\n---\nbody`
@@ -273,20 +275,20 @@ describe('parseEntry — frontmatter is YAML only (gray-matter engine lockdown)'
     expect(entry._parseError).toBe(true)
   })
 
-  it('an explicit ---yaml language still parses (alias of the default engine)', () => {
+  it('an explicit ---yaml language still parses (the one suffix the contract allows)', () => {
     const entry = parseEntry('/fake/20260101-x.md', '---yaml\nschema: 1\ntask: t\n---\nbody')
     expect(entry._parseError).toBeUndefined()
     expect(entry.schema).toBe(1)
     expect(entry.task).toBe('t')
   })
 
-  it('safeMatter (the body reader used by recall) throws on ---js instead of evaluating it', () => {
-    expect(() => safeMatter(jsEntry('js'))).toThrow(/YAML only/)
+  it('splitFrontmatter (the body reader used by recall) throws on ---js instead of evaluating it', () => {
+    expect(() => splitFrontmatter(jsEntry('js'))).toThrow(/YAML only/)
     expect((globalThis as Record<string, unknown>)[PROBE]).toBeUndefined()
   })
 
-  it('safeMatter treats non-object frontmatter (a bare scalar) as empty data, not a crash', () => {
-    const { data, content } = safeMatter('---\njust a string\n---\nbody')
+  it('splitFrontmatter treats non-object frontmatter (a bare scalar) as empty data, not a crash', () => {
+    const { data, content } = splitFrontmatter('---\njust a string\n---\nbody')
     expect(data).toEqual({})
     expect(content).toBe('body')
   })

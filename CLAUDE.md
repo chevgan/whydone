@@ -40,7 +40,7 @@ SCHEMA.md             — the entry format contract (single source of truth)
 
 - No backend, no database, no cloud — files in the repo only.
 - Node >= 20.19, ESM only (`"type": "module"`), compiled with tsdown to `dist/`; never ship runtime TypeScript.
-- Zero runtime dependencies: citty, gray-matter, picocolors, tinyglobby, and @clack/prompts (lazy-loaded TTY wizard) live in devDependencies and are bundled by tsdown into a single self-contained `dist/cli.js` (also vendored as `bin/whydone.mjs`).
+- Zero runtime dependencies: citty, js-yaml, picocolors, tinyglobby, and @clack/prompts (lazy-loaded TTY wizard) live in devDependencies and are bundled by tsdown into a single self-contained `dist/cli.js` (also vendored as `bin/whydone.mjs`).
 - Target audience v1: solo developers using Claude Code; zero-config defaults.
 
 ## Commands

@@ -1,5 +1,5 @@
-import matter from 'gray-matter'
 import path from 'node:path'
+import { splitFrontmatter } from './frontmatter.js'
 import type { ParsedEntry } from '../types.js'
 
 /**
@@ -13,56 +13,6 @@ export const CANONICAL_HEADINGS: string[] = [
   '## Gotchas / risks',
   '## Verify-later / follow-ups',
 ]
-
-// ─── gray-matter engine lockdown ─────────────────────────────────────────────
-
-/**
- * gray-matter picks its parser from the language written right after the
- * opening delimiter (`---js`, `---json`), and its JavaScript engine is a
- * direct eval(). Left enabled, a journal entry whose frontmatter starts with
- * `---js` runs arbitrary code inside `validate`, `index`, `recall` and the
- * /recall skill — in CI, and on every machine that clones the repo
- * (reproduced in the v1.3 audit: validate reported "0 errors" while the
- * entry's code executed). Entries are YAML by contract (SCHEMA.md
- * §Frontmatter Fields, §Parser Notes), so every non-YAML engine is replaced
- * by one that throws; the lenient read path then degrades such a file to
- * _parseError exactly like malformed YAML. `js`/`javascript` and `json` are
- * the only engines gray-matter 4 registers besides yaml — any other language
- * suffix is already an "engine not registered" throw.
- */
-function refuseLanguage(language: string): never {
-  throw new Error(`frontmatter language "${language}" is not allowed — entries are YAML only`)
-}
-
-function blockedEngine(language: string) {
-  return {
-    parse: (): never => refuseLanguage(language),
-    stringify: (): never => refuseLanguage(language),
-  }
-}
-
-const YAML_ONLY_ENGINES = {
-  js: blockedEngine('js'),
-  javascript: blockedEngine('javascript'),
-  json: blockedEngine('json'),
-}
-
-/**
- * The ONLY way src/ may call gray-matter: non-YAML engines disabled.
- * Passing options also bypasses gray-matter's process-wide parse cache
- * (keyed by file content), which is a memory leak in long-lived callers.
- * Frontmatter that parses to a non-object (a bare scalar, a list) is
- * treated as empty data — the read path is lenient, never a crash.
- */
-export function safeMatter(raw: string): { data: Record<string, unknown>; content: string } {
-  const file = matter(raw, { engines: YAML_ONLY_ENGINES })
-  const parsed: unknown = file.data
-  const data =
-    typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : {}
-  return { data, content: file.content }
-}
 
 /**
  * Computed-field namespace of ParsedEntry. Unknown frontmatter keys are
@@ -110,8 +60,8 @@ function toArrayResult(v: unknown): ToArrayResult {
 /**
  * Normalize a date value to a YYYY-MM-DD string.
  *
- * SCHEMA.md Pitfall 1: unquoted "date: 2026-06-01" is parsed by gray-matter/js-yaml
- * as a JavaScript Date object. Normalize it back to a string here.
+ * SCHEMA.md Pitfall 1: unquoted "date: 2026-06-01" is parsed by js-yaml as a
+ * JavaScript Date object. Normalize it back to a string here.
  */
 function normDate(v: unknown): string {
   if (typeof v === 'string') return v
@@ -166,8 +116,8 @@ function detectSections(content: string): string[] {
  * Parse a single changelog entry file leniently.
  *
  * Always returns a ParsedEntry — never throws.
- * On YAMLException (or a refused non-YAML frontmatter language):
- * returns { _file, _stem, _parseError: true }.
+ * On a YAML error, a refused non-YAML frontmatter language, or an unclosed
+ * frontmatter block: returns { _file, _stem, _parseError: true }.
  *
  * Handles all three SCHEMA.md §Parser Notes pitfalls:
  *   Pitfall 1 — date coercion (Date → YYYY-MM-DD string)
@@ -178,7 +128,7 @@ export function parseEntry(filePath: string, rawContent: string): ParsedEntry {
   const stem = path.basename(filePath, '.md')
 
   try {
-    const { data, content } = safeMatter(rawContent)
+    const { data, content } = splitFrontmatter(rawContent)
 
     // Forward-compatible spread of unknown keys — minus the computed namespace.
     const extra: Record<string, unknown> = {}
@@ -219,7 +169,7 @@ export function parseEntry(filePath: string, rawContent: string): ParsedEntry {
 
     return entry
   } catch {
-    // Pitfall 3: YAMLException (or refused frontmatter language) — degrade gracefully
+    // Pitfall 3: YAMLException (or a refused language / unclosed block) — degrade gracefully
     return {
       _file: filePath,
       _stem: stem,
