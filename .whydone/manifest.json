@@ -1,5 +1,54 @@
 [
   {
+    "id": "20260906-prepare-whydone-for-the-community-plugin-directory",
+    "date": "2026-09-06",
+    "slug": "prepare-whydone-for-the-community-plugin-directory",
+    "task": "Prepare whydone for the community plugin directory",
+    "status": "done",
+    "tags": [
+      "plugin-directory",
+      "privacy",
+      "release",
+      "security"
+    ],
+    "files": [
+      "cli/whydone.mjs",
+      "hooks/hooks.json",
+      "scripts/sync-plugin-cli.mjs",
+      "src/commands/init.ts",
+      "src/commands/update.ts",
+      "templates/skills/log/SKILL.md",
+      "templates/skills/recall/SKILL.md",
+      ".github/workflows/ci.yml",
+      ".gitattributes",
+      "PRIVACY.md",
+      "THIRD_PARTY_NOTICES.md",
+      "README.md",
+      "tsdown.config.mjs",
+      "tests/third-party-notices.test.ts",
+      "src/lib/frontmatter.ts",
+      "src/lib/parse-entry.ts",
+      "SCHEMA.md",
+      "vitest.config.ts",
+      "package.json",
+      ".claude-plugin/plugin.json"
+    ],
+    "links": [
+      "https://github.com/chevgan/whydone/pull/1",
+      "https://github.com/chevgan/whydone/pull/2"
+    ],
+    "supersedes": [],
+    "_sections": [
+      "## What changed",
+      "## Why / decisions",
+      "## Alternatives rejected",
+      "## Gotchas / risks",
+      "## Verify-later / follow-ups"
+    ],
+    "_parseError": false,
+    "_supersededBy": []
+  },
+  {
     "id": "20260906-audit-whydone-and-fix-the-four-top-findings",
     "date": "2026-09-06",
     "slug": "audit-whydone-and-fix-the-four-top-findings",
