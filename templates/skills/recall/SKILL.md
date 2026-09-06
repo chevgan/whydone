@@ -3,7 +3,7 @@ name: recall
 description: "Load relevant past work-journal entries (decisions, gotchas, open follow-ups) from .whydone/ into this session. Use when starting work on a topic, when the user asks what was already done or decided, or before changing code that likely has recorded history. Ranks via the whydone CLI first, then reads only the top entries within a token budget."
 argument-hint: "[topic keywords, file paths, or #tags]"
 disable-model-invocation: false
-allowed-tools: Read, Bash(cd:*), Bash(node "${CLAUDE_PLUGIN_ROOT}/bin/whydone.mjs" recall:*), Bash(npx --no-install whydone recall:*), Bash(node_modules/.bin/whydone recall:*), Bash(git status:*), Bash(git diff:*), Bash(git rev-parse:*)
+allowed-tools: Read, Bash(cd:*), Bash(node "${CLAUDE_PLUGIN_ROOT}/cli/whydone.mjs" recall:*), Bash(npx --no-install whydone recall:*), Bash(node_modules/.bin/whydone recall:*), Bash(git status:*), Bash(git diff:*), Bash(git rev-parse:*)
 ---
 
 Load relevant past whydone journal entries into this session. Follow the numbered steps in order.
@@ -38,7 +38,7 @@ Recall is **read-only**: never create, edit, or delete anything in `.whydone/`, 
 Run from the repo root the FIRST command in this chain that succeeds, with identical flags at each chain position:
 
 ```
-chain 1. node "${CLAUDE_PLUGIN_ROOT}/bin/whydone.mjs" recall --json --limit 5 [--query "..."] [--files a,b] [--tags x,y]
+chain 1. node "${CLAUDE_PLUGIN_ROOT}/cli/whydone.mjs" recall --json --limit 5 [--query "..."] [--files a,b] [--tags x,y]
 chain 2. npx --no-install whydone recall --json --limit 5 [--query "..."] [--files a,b] [--tags x,y]
 chain 3. node_modules/.bin/whydone recall --json --limit 5 [same flags]
 ```

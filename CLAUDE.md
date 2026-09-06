@@ -8,7 +8,7 @@
   - `/log` (`/whydone:log` via plugin) — writes one journal entry after a task, per the journal mode (ask / auto / manual) in `.whydone/config.json`.
   - `/recall` (`/whydone:recall` via plugin) — ranks and loads relevant past entries; auto-invocable.
 - **Eight CLI commands** (citty, entry point `src/cli.ts`): `init`, `index`, `validate`, `recall`, `update`, `uninstall`, `hide`, `publish`.
-- **Plugin channel (primary)**: `.claude-plugin/` manifests serve `templates/skills/`, `hooks/hooks.json` ships the Stop hook, and `bin/whydone.mjs` is the vendored self-contained CLI (committed build artifact, synced from `dist/cli.js` by `scripts/sync-plugin-bin.mjs`; CI fails on drift). Per-project bootstrap for plugin users: `init --journal-only`.
+- **Plugin channel (primary)**: `.claude-plugin/` manifests serve `templates/skills/`, `hooks/hooks.json` ships the Stop hook, and `cli/whydone.mjs` is the vendored self-contained CLI (committed build artifact, synced from `dist/cli.js` by `scripts/sync-plugin-cli.mjs`; CI fails on drift). Per-project bootstrap for plugin users: `init --journal-only`.
 
 ## Layout
 
@@ -19,7 +19,7 @@ src/lib/              — copy-skills, marker-block (CLAUDE.md patching), lock-f
                         git-exclude (.git/info/exclude for storage: local),
                         entry parsing/validation, rank-entries (recall scoring)
 templates/skills/     — log/SKILL.md, recall/SKILL.md (single source of truth)
-bin/whydone.mjs       — vendored plugin CLI (committed; regenerate via npm run build, never edit)
+cli/whydone.mjs       — vendored plugin CLI (committed; regenerate via npm run build, never edit)
 hooks/hooks.json      — plugin Stop hook (invokes the vendored CLI)
 tests/                — vitest, memfs-backed
 SCHEMA.md             — the entry format contract (single source of truth)
@@ -34,13 +34,13 @@ SCHEMA.md             — the entry format contract (single source of truth)
 - Entries are immutable tombstones — revisions are new entries with `supersedes:`.
 - **Storage axis, orthogonal to mode**: `storage: committed` (default) vs `local` in config.json. Local journals are hidden ONLY via `.git/info/exclude` (never a committed .gitignore — that would reveal them); `hide` refuses on a tracked `.whydone/`; a plain `uninstall` must never drop the exclude entries of a surviving local journal (only `--purge` cleans them).
 - Recall ranking is deterministic (no embeddings, no model calls): see `src/lib/rank-entries.ts`.
-- Skills resolve the CLI via a fixed chain: `node "${CLAUDE_PLUGIN_ROOT}/bin/whydone.mjs"` (plugin-vendored) → `npx --no-install whydone` → `node_modules/.bin/whydone`. Plain `npx` (network fetch) is forbidden inside skills. The vendored path spelling is pinned by tests/plugin-channel.test.ts.
+- Skills resolve the CLI via a fixed chain: `node "${CLAUDE_PLUGIN_ROOT}/cli/whydone.mjs"` (plugin-vendored) → `npx --no-install whydone` → `node_modules/.bin/whydone`. Plain `npx` (network fetch) is forbidden inside skills. The vendored path spelling is pinned by tests/plugin-channel.test.ts.
 
 ## Constraints
 
 - No backend, no database, no cloud — files in the repo only.
 - Node >= 20.19, ESM only (`"type": "module"`), compiled with tsdown to `dist/`; never ship runtime TypeScript.
-- Zero runtime dependencies: citty, js-yaml, picocolors, tinyglobby, and @clack/prompts (lazy-loaded TTY wizard) live in devDependencies and are bundled by tsdown into a single self-contained `dist/cli.js` (also vendored as `bin/whydone.mjs`).
+- Zero runtime dependencies: citty, js-yaml, picocolors, tinyglobby, and @clack/prompts (lazy-loaded TTY wizard) live in devDependencies and are bundled by tsdown into a single self-contained `dist/cli.js` (also vendored as `cli/whydone.mjs`).
 - Target audience v1: solo developers using Claude Code; zero-config defaults.
 
 ## Commands

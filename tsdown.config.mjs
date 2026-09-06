@@ -9,7 +9,10 @@ import { defineConfig } from 'tsdown'
 // All runtime deps live in devDependencies so tsdown bundles them: the emitted
 // dist/cli.js is fully self-contained (zero install-time dependencies for npm
 // consumers, and the same file is vendored verbatim into the plugin channel as
-// bin/whydone.mjs by scripts/sync-plugin-bin.mjs).
+// cli/whydone.mjs by scripts/sync-plugin-cli.mjs).
+// The bundled packages keep no license headers in the output, so their
+// notices live in THIRD_PARTY_NOTICES.md; tests/third-party-notices.test.ts
+// checks that file against the //#region markers rolldown leaves in the bundle.
 // dts: false also kills declaration sourcemaps — a bin-only package ships no
 // types, and .map files would leak full source text into the tarball.
 export default defineConfig({
@@ -23,7 +26,7 @@ export default defineConfig({
   dts: false,
   // One self-contained file: the lazy per-subcommand import()s in cli.ts would
   // otherwise split into sibling chunks, and the plugin channel vendors exactly
-  // one file (bin/whydone.mjs).
+  // one file (cli/whydone.mjs).
   // NOTE: tsdown 0.22 deprecation hint suggests codeSplitting: false, but that
   // option is NOT wired in 0.22 (verified: emits chunked output) — keep the
   // deprecated-but-working outputOptions form until the tsdown upgrade.

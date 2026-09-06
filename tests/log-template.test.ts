@@ -22,7 +22,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const SKILL_PATH = path.join(__dirname, '..', 'templates', 'skills', 'log', 'SKILL.md')
 
 const EXPECTED_ALLOWED_TOOLS =
-  'Read, Write, Bash(cd:*), Bash(git rev-parse:*), Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git ls-files:*), Bash(node "${CLAUDE_PLUGIN_ROOT}/bin/whydone.mjs":*), Bash(npx --no-install whydone:*), Bash(node_modules/.bin/whydone:*), Bash(ls:*)'
+  'Read, Write, Bash(cd:*), Bash(git rev-parse:*), Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git ls-files:*), Bash(node "${CLAUDE_PLUGIN_ROOT}/cli/whydone.mjs":*), Bash(npx --no-install whydone:*), Bash(node_modules/.bin/whydone:*), Bash(ls:*)'
 
 describe('log SKILL.md template', () => {
   const raw = readFileSync(SKILL_PATH, 'utf-8')
@@ -92,7 +92,7 @@ describe('log SKILL.md template', () => {
 
   it('body defines the CLI resolution chain with the plugin-vendored path first', () => {
     expect(content).toContain('CLI RESOLUTION')
-    expect(content).toContain('node "${CLAUDE_PLUGIN_ROOT}/bin/whydone.mjs"')
+    expect(content).toContain('node "${CLAUDE_PLUGIN_ROOT}/cli/whydone.mjs"')
     // The placeholder-skip rule keeps the npm-installed (unsubstituted) copy
     // of the skill from executing a garbage path.
     expect(content).toContain('unsubstituted `${CLAUDE_PLUGIN_ROOT}` placeholder')

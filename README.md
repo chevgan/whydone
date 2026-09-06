@@ -141,7 +141,7 @@ Then it copies the skills into your project's `.claude/skills/`, scaffolds `.why
 
 Non-interactive setup: `npx whydone init --yes` (ask mode + hook), or `npx whydone init --mode auto`. In CI / non-TTY, a bare `init` asks nothing, installs no hook, and never overwrites a committed mode.
 
-Whichever channel runs it, the skills resolve the CLI through a fixed offline chain — the plugin's vendored `bin/whydone.mjs` first, then `npx --no-install whydone` from `node_modules` — never a network fetch mid-session.
+Whichever channel runs it, the skills resolve the CLI through a fixed offline chain — the plugin's vendored `cli/whydone.mjs` first, then `npx --no-install whydone` from `node_modules` — never a network fetch mid-session.
 
 ## Why whydone
 
@@ -177,7 +177,7 @@ The mode lives in `.whydone/config.json` and controls two things: whether `/log`
 | `ask` (recommended) | asks one confirm question | on unlogged work, nudges Claude to draft the entry and **ask** before writing |
 | `auto` | writes silently — nothing in the chat at all | on every real change, nudges Claude to write the entry or update the one this session already wrote |
 
-**How the trigger works.** Plugin installs ship the Stop hook with the plugin itself — active in every project, no per-project step. On the npm channel, `init` installs it into `.claude/settings.local.json` (or `~/.claude/settings.json` with `--global`). Either way, when Claude finishes a turn, the hook checks for a work signal — commits or dirty files since the last journal entry — and tells Claude to invoke `/log`. How often it fires depends on what a nudge costs you. In `ask` a nudge is a question, so it comes once per commit-bounded chunk of work: after one, the hook stays quiet until it has produced an entry **and** new commits have landed since — uncommitted churn never re-asks, and a declined nudge stays declined for the rest of the session. In `auto` a nudge costs you nothing (no question, no chat output), so it fires whenever the working tree actually changed, and the session's entry is rewritten in place instead of freezing at whatever the first turn contained. In both modes an unchanged repo state never nudges twice. It is silent in manual mode, silent without git, silent on a fresh journal with zero entries (your repo history is never retroactively "unlogged"), silent right after a normal `/log`-then-commit cycle, and silent on every internal error — a hook failure can never block your turn. On the npm channel the hook command runs the generated launcher at `.claude/whydone-hook.cjs` (installed as an absolute `node "…/whydone-hook.cjs"` command) — a one-screen script, per-machine, harmless if committed, fine to gitignore. On the plugin channel there is no launcher: the hook ships inside the plugin and runs its vendored CLI directly (`node "${CLAUDE_PLUGIN_ROOT}/bin/whydone.mjs" hook stop`).
+**How the trigger works.** Plugin installs ship the Stop hook with the plugin itself — active in every project, no per-project step. On the npm channel, `init` installs it into `.claude/settings.local.json` (or `~/.claude/settings.json` with `--global`). Either way, when Claude finishes a turn, the hook checks for a work signal — commits or dirty files since the last journal entry — and tells Claude to invoke `/log`. How often it fires depends on what a nudge costs you. In `ask` a nudge is a question, so it comes once per commit-bounded chunk of work: after one, the hook stays quiet until it has produced an entry **and** new commits have landed since — uncommitted churn never re-asks, and a declined nudge stays declined for the rest of the session. In `auto` a nudge costs you nothing (no question, no chat output), so it fires whenever the working tree actually changed, and the session's entry is rewritten in place instead of freezing at whatever the first turn contained. In both modes an unchanged repo state never nudges twice. It is silent in manual mode, silent without git, silent on a fresh journal with zero entries (your repo history is never retroactively "unlogged"), silent right after a normal `/log`-then-commit cycle, and silent on every internal error — a hook failure can never block your turn. On the npm channel the hook command runs the generated launcher at `.claude/whydone-hook.cjs` (installed as an absolute `node "…/whydone-hook.cjs"` command) — a one-screen script, per-machine, harmless if committed, fine to gitignore. On the plugin channel there is no launcher: the hook ships inside the plugin and runs its vendored CLI directly (`node "${CLAUDE_PLUGIN_ROOT}/cli/whydone.mjs" hook stop`).
 
 **Auto mode is fire-and-forget.** Nothing is printed — no preview, no question, no report. The journal never speaks in the chat; only a failed index rebuild or a validation error does. One session leaves one entry: while that entry is still uncommitted, later turns rewrite it whole, so it ends up describing the session instead of its first ten minutes. Once you commit it, it is history — a later change becomes a new entry, with `supersedes:` if it overturns the old one. And auto never asks: nothing new to log means nothing is written, a size-detected minimal entry is written full instead, and a truncated file list or a missing git repo is a fact the entry carries rather than a question for you. Review it in `git diff` (or open the file for local-storage journals); delete it to reject.
 
@@ -325,7 +325,7 @@ One deterministic formula, no model calls: `3 x file-overlap + 2 x tag-match + 2
 
 ### The two channels, honestly compared
 
-The plugin carries the **full** experience: skills, deterministic recall ranking, the Stop hook, and journal scaffolding — its vendored `bin/whydone.mjs` is the same single-file CLI the npm package ships, so nothing degrades.
+The plugin carries the **full** experience: skills, deterministic recall ranking, the Stop hook, and journal scaffolding — its vendored `cli/whydone.mjs` is the same single-file CLI the npm package ships, so nothing degrades.
 
 | | Plugin (default) | npm devDependency |
 |---|---|---|
@@ -365,6 +365,10 @@ Project-level skills in `.claude/skills/` only load after you accept Claude Code
 **Does the journal leak secrets?**
 With the default committed storage, `.whydone/` is committed — in public repos it's public. The `/log` skill summarizes decisions in prose and is instructed never to transcribe command output, env values, or credentials — and it applies the same rules to [local-storage](#private-mode-a-local-only-journal) journals, because `whydone publish` can make any of them public later. Still: review entries like you review diffs.
 
+## Privacy and data
+
+whydone collects nothing and sends nothing. There is no telemetry, no analytics, no account and no network access — the CLI is one self-contained file with zero runtime dependencies, and the Stop hook only reads git state. Everything whydone writes lands in the repository it runs in: journal entries (previewed and confirmed in `ask` mode, written silently only in the opt-in `auto` mode), the generated index, and one small hook-state file under `.whydone/.cache/`. Entries are Claude's short prose summary of what was done and why, never a transcript. The skills run inside your own Claude Code session, so what they read and write passes through the model exactly like any file you open there — whydone adds no channel of its own. The full statement is in [PRIVACY.md](PRIVACY.md).
+
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). The single-file CLI bundles a handful of MIT/ISC-licensed open-source packages; their notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
